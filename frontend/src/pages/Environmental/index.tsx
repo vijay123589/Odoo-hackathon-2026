@@ -196,7 +196,7 @@ export const Environmental: React.FC = () => {
 
     try {
       // Call the resilient backend carbon engine endpoint
-      const response = await fetch('http://localhost:5000/api/carbon/calculate', {
+      const response = await fetch('/api/v1/environment/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

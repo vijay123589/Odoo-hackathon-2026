@@ -137,7 +137,7 @@ export const AICopilot: React.FC = () => {
 
     try {
       // 1. Attempt to fetch from the Express AI endpoint
-      const response = await fetch('http://localhost:5000/api/copilot/chat', {
+      const response = await fetch('/api/v1/copilot/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: textToSend }),
