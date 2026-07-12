@@ -1,179 +1,392 @@
-import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Send, Bot, User, HelpCircle, Lightbulb, CheckCircle2 } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { CopilotHistory, ChatSession } from '@/components/copilot/CopilotHistory';
+import { CopilotInsights } from '@/components/copilot/CopilotInsights';
+import { CopilotMessage, Message } from '@/components/copilot/CopilotMessage';
+import {
+  Sparkles,
+  Send,
+  Bot,
+  ChevronRight,
+} from 'lucide-react';
 
 export const AICopilot: React.FC = () => {
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string }>>([
-    {
-      sender: 'bot',
-      text: 'Hello. I am the EcoSphere ESG Copilot. Ask me anything about environmental footprints, CSR targets, or governance compliance policies.',
-    },
+  const navigate = useNavigate();
+
+  // History list state
+  const [sessions, setSessions] = useState<ChatSession[]>([
+    { id: '1', title: 'Carbon footprint audit Q1', isPinned: true, dateGroup: 'Today' },
+    { id: '2', title: 'Facilities energy mitigation', isPinned: false, dateGroup: 'Today' },
+    { id: '3', title: 'CSR volunteering ledger', isPinned: false, dateGroup: 'Yesterday' },
+    { id: '4', title: 'GRI compliance checks', isPinned: false, dateGroup: 'Last Week' },
   ]);
+
+  const [activeSessionId, setActiveSessionId] = useState<string>('1');
   const [query, setQuery] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [savedInsightsCount, setSavedInsightsCount] = useState(4);
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  // Grouped messages per session
+  const [sessionsMessages, setSessionsMessages] = useState<Record<string, Message[]>>({
+    '1': [
+      {
+        sender: 'bot',
+        text: 'Hello. I am the EcoSphere ESG Copilot. I have loaded your carbon footprint audit statistics. Ask me to compare departments, inspect specific scopes, or analyze compliance risks.',
+      },
+    ],
+    '2': [
+      {
+        sender: 'bot',
+        text: 'Facilities energy mitigations ledger loaded. Facilities accounts for 54% of Scope 2 metrics. Powering down systems post-18:00 could yield a 15% reduction.',
+      },
+    ],
+  });
 
-    const userQuery = query;
-    const newMessages = [...messages, { sender: 'user' as const, text: userQuery }];
-    setMessages(newMessages);
+  const messages = useMemo(() => {
+    return sessionsMessages[activeSessionId] || [
+      {
+        sender: 'bot',
+        text: 'New analysis session started. Query our ESG databases for carbon reduction milestones, social contributions, or governance audits.',
+      },
+    ];
+  }, [sessionsMessages, activeSessionId]);
+
+  // Messages list ref for auto-scrolling
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isThinking]);
+
+  // Suggested preset questions
+  const suggestedPrompts = [
+    'Summarize ESG performance',
+    'Which department emits the most carbon?',
+    'Show compliance risks',
+    'Predict sustainability trends',
+  ];
+
+  // Streaming Typewriter simulation
+  const simulateBotResponse = (text: string, chartType: any = null, tableCols: any = null, tableData: any = null) => {
+    setIsThinking(true);
+    
+    setTimeout(() => {
+      setIsThinking(false);
+      setIsStreaming(true);
+      let currentLen = 0;
+      const fullText = text;
+      
+      const newBotMsg: Message = {
+        sender: 'bot',
+        text: '',
+        chartType,
+        tableColumns: tableCols,
+        tableData: tableData,
+      };
+
+      setSessionsMessages((prev) => {
+        const currentMsgs = prev[activeSessionId] || [];
+        return {
+          ...prev,
+          [activeSessionId]: [...currentMsgs, newBotMsg],
+        };
+      });
+
+      const timer = setInterval(() => {
+        currentLen += 8;
+        if (currentLen >= fullText.length) {
+          clearInterval(timer);
+          setIsStreaming(false);
+          setSessionsMessages((prev) => {
+            const currentMsgs = [...(prev[activeSessionId] || [])];
+            if (currentMsgs.length > 0) {
+              currentMsgs[currentMsgs.length - 1].text = fullText;
+            }
+            return {
+              ...prev,
+              [activeSessionId]: currentMsgs,
+            };
+          });
+        } else {
+          setSessionsMessages((prev) => {
+            const currentMsgs = [...(prev[activeSessionId] || [])];
+            if (currentMsgs.length > 0) {
+              currentMsgs[currentMsgs.length - 1].text = fullText.slice(0, currentLen);
+            }
+            return {
+              ...prev,
+              [activeSessionId]: currentMsgs,
+            };
+          });
+        }
+      }, 25);
+    }, 1000);
+  };
+
+  const handleSendQuery = (customQuery?: string) => {
+    const textToSend = customQuery || query;
+    if (!textToSend.trim() || isThinking || isStreaming) return;
+
+    // Save user message
+    const userMsg: Message = { sender: 'user', text: textToSend };
+    setSessionsMessages((prev) => {
+      const currentMsgs = prev[activeSessionId] || [];
+      return {
+        ...prev,
+        [activeSessionId]: [...currentMsgs, userMsg],
+      };
+    });
     setQuery('');
 
-    // Simulate bot response
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
+    // Predefined AI responses depending on preset questions
+    const qLower = textToSend.toLowerCase();
+    
+    if (qLower.includes('summarize esg') || qLower.includes('performance')) {
+      simulateBotResponse(
+        "EcoSphere ESG performance summary for FY2026 shows positive trends:\n- Carbon Intensity decreased by 12.4% vs Q1.\n- CSR volunteering aggregates reached 465 total hours.\n- Compliance auditor logs scored 96.2%.\n\nSee distribution weightages below:",
+        'pie'
+      );
+    } else if (qLower.includes('department') || qLower.includes('emits') || qLower.includes('most carbon')) {
+      simulateBotResponse(
+        "Facilities department leads corporate emissions under grid electricity usage (Scope 2). Let's inspect department logs:",
+        'bar',
+        ['Department', 'Activity Type', 'Annual CO2 Equivalent'],
+        [
+          { 'Department': 'Facilities', 'Activity Type': 'Electricity usage', 'Annual CO2 Equivalent': '210 t' },
+          { 'Department': 'Logistics', 'Activity Type': 'Diesel distribution', 'Annual CO2 Equivalent': '140 t' },
+          { 'Department': 'Engineering', 'Activity Type': 'Systems build', 'Annual CO2 Equivalent': '85 t' },
+        ]
+      );
+    } else if (qLower.includes('compliance') || qLower.includes('risk')) {
+      simulateBotResponse(
+        "ESG compliance scan indicates a low overall risk profile. Check priority items below:\n- Logistics Scope 1 diesel audits are due in 8 days.\n- Scope 3 supply chain logs show vendor reporting gaps in Facilities.\n\nCompliance benchmarks compared below:",
+        'radar'
+      );
+    } else if (qLower.includes('trend') || qLower.includes('predict')) {
+      simulateBotResponse(
+        "Sustainability forecasting indicates a steady decline in Scope 2 footprints due to scheduled renewable energy transfers. Our 6-month carbon ledger trend line is projected as follows:",
+        'area'
+      );
+    } else if (qLower.includes('audit') || qLower.includes('overdue')) {
+      simulateBotResponse(
+        "There are currently 0 overdue audits. However, 2 compliance reviews are approaching their dates:\n1. Scope 3 Supply Chain Audit (Due in 8 days)\n2. CSR Volunteering Log Verification (Due in 12 days)",
+        null,
+        ['Audit Task', 'Scope Domain', 'Due Date', 'Status'],
+        [
+          { 'Audit Task': 'Scope 3 Supply Chain', 'Scope Domain': 'Environmental', 'Due Date': 'July 20, 2026', 'Status': 'PENDING' },
+          { 'Audit Task': 'CSR volunteer ledger verify', 'Scope Domain': 'Social', 'Due Date': 'July 24, 2026', 'Status': 'DRAFT' },
+        ]
+      );
+    } else {
+      simulateBotResponse(
+        `I've analyzed your inquiry regarding "${textToSend}". Based on our active ledger scopes,Facilities Scope 2 accounts for 54% of emissions. Shift logistics flights to high-speed rail to maintain net-zero target paths.`
+      );
+    }
+  };
+
+  // Session management hooks
+  const handleNewSession = () => {
+    const newId = `sess-${Date.now()}`;
+    const newSess: ChatSession = {
+      id: newId,
+      title: `Analysis Session #${sessions.length + 1}`,
+      isPinned: false,
+      dateGroup: 'Today',
+    };
+    setSessions([newSess, ...sessions]);
+    setActiveSessionId(newId);
+    setSessionsMessages((prev) => ({
+      ...prev,
+      [newId]: [
         {
           sender: 'bot',
-          text: `Analyzing your request: "${userQuery}". Based on GRI 305 emissions standards, I recommend reviewing Facilities Q2 Scope 2 electricity indexes, which currently account for 54% of your total environmental footprint. Reducing active off-hour energy consumption by 15% would align your target pathway back to carbon neutrality.`,
+          text: 'New session started. Ask me to predict sustainability trends or compare department emissions.',
         },
-      ]);
-    }, 700);
+      ],
+    }));
+  };
+
+  const handleRenameSession = (id: string, newTitle: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, title: newTitle } : s))
+    );
+  };
+
+  const handleDeleteSession = (id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    if (activeSessionId === id) {
+      const remaining = sessions.filter((s) => s.id !== id);
+      if (remaining.length > 0) {
+        setActiveSessionId(remaining[0].id);
+      }
+    }
+  };
+
+  const handleTogglePin = (id: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isPinned: !s.isPinned } : s))
+    );
+  };
+
+  // Right sidebar quick action navigation mapper
+  const handleQuickAction = (actionKey: string) => {
+    if (actionKey === 'reports') {
+      navigate('/reports');
+    } else if (actionKey === 'environmental') {
+      navigate('/environmental');
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      {/* Page Header */}
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground/90 flex items-center space-x-2.5">
             <Sparkles className="h-8 w-8 text-primary animate-pulse shrink-0" />
-            <span>AI Copilot</span>
+            <span>AI Copilot Intelligence Workspace</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5">
-            Query environmental databases, predict compliance anomalies, and automate disclosure drafting using generative intelligence.
+            Query environmental ledgers, predict compliance anomalies, and automate audit drafts using generative intelligence.
           </p>
         </div>
       </div>
 
-      {/* Main chat layout */}
-      <div className="grid gap-6 lg:grid-cols-4">
-        {/* Left Side: Chat Workspace (3 parts) */}
-        <Card className="lg:col-span-3 flex flex-col h-[580px] bg-card border border-border/50 relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(28,38,30,0.03)]">
-          {/* Subtle background blur spots */}
+      {/* Workspace Tri-pane grid layout */}
+      <div className="grid gap-6 lg:grid-cols-4 items-start">
+        {/* Left column: Session History (1 part) */}
+        <div className="lg:col-span-1 h-[600px]">
+          <CopilotHistory
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelectSession={setActiveSessionId}
+            onNewSession={handleNewSession}
+            onRenameSession={handleRenameSession}
+            onDeleteSession={handleDeleteSession}
+            onTogglePinSession={handleTogglePin}
+            savedInsightsCount={savedInsightsCount}
+            onViewInsights={() => setSavedInsightsCount((c) => c + 1)}
+            className="h-full"
+          />
+        </div>
+
+        {/* Center column: Interactive chat canvas (2 parts) */}
+        <Card className="lg:col-span-2 flex flex-col h-[600px] bg-card border border-border/50 relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(28,38,30,0.03)] p-0">
+          {/* Subtle decoration circles */}
           <div className="absolute top-[-10%] right-[-10%] w-[35%] h-[35%] rounded-full bg-primary/3 filter blur-[80px] pointer-events-none" />
-          
+
+          {/* Header */}
           <div className="px-6 py-4 border-b border-border/55 flex items-center justify-between shrink-0 bg-card z-10">
             <div className="flex items-center space-x-3">
-              <div className="h-8 w-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/5">
-                <Bot className="h-4.5 w-4.5" />
+              <div className="h-8.5 w-8.5 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/5">
+                <Bot className="h-4.5 w-4.5 animate-pulse" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-foreground/90 leading-none mb-1">ESG Copilot Assistant</h3>
-                <span className="text-[9px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider">Online & Verified</span>
+                <h3 className="text-xs font-bold text-foreground/90 leading-none mb-1">EcoSphere Intelligence AI</h3>
+                <span className="text-[9px] text-green-600 dark:text-green-400 font-bold uppercase tracking-wider">Verified Analytics Agent</span>
               </div>
             </div>
-            <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold" onClick={() => setMessages([messages[0]])}>
-              Clear Session
+            <div className="flex items-center space-x-1">
+              <Badge variant="primary" className="scale-90 px-2">GRI v4</Badge>
+            </div>
+          </div>
+
+          {/* Messages or Empty state */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#FAF8F4]/20 dark:bg-card/25 z-10">
+            {messages.length <= 1 && !isThinking ? (
+              // Enhanced Empty State
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-6 max-w-md mx-auto pt-6 animate-in fade-in duration-300">
+                <div className="h-14 w-14 rounded-2xl bg-primary/5 flex items-center justify-center text-primary shadow-sm border border-primary/5 relative">
+                  <Bot className="h-7 w-7" />
+                  <Sparkles className="absolute -top-1.5 -right-1.5 h-4 w-4 text-primary animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-foreground/90 uppercase tracking-wider">EcoSphere ESG Analytics</h3>
+                  <p className="text-xs text-muted-foreground mt-2 leading-relaxed font-semibold">
+                    I can generate compliance summaries, predict carbon reduction rates, or locate active audit anomalies.
+                  </p>
+                </div>
+
+                {/* Suggested prompt chips */}
+                <div className="grid gap-2.5 w-full pt-2">
+                  <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest block text-left">Suggested Investigations</span>
+                  {suggestedPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => handleSendQuery(prompt)}
+                      className="w-full text-left p-3 border border-border hover:border-primary/20 hover:bg-primary/5 rounded-2xl text-xs font-bold text-foreground/80 transition-all duration-200 shadow-[0_2px_8px_rgba(28,38,30,0.003)] flex justify-between items-center group"
+                    >
+                      <span>{prompt}</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/45 group-hover:text-primary transition-colors shrink-0 ml-1" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              // Chat conversation
+              <div className="space-y-6">
+                {messages.map((msg, index) => (
+                  <CopilotMessage
+                    key={index}
+                    message={msg}
+                    onBookmark={() => setSavedInsightsCount((c) => c + 1)}
+                    onRegenerate={() => handleSendQuery(messages[messages.length - 2]?.text)}
+                  />
+                ))}
+
+                {/* Thinking indicator bouncing dots */}
+                {isThinking && (
+                  <div className="flex space-x-3.5 max-w-[80%] animate-in fade-in duration-100">
+                    <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/5 shadow-sm">
+                      <Bot className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="p-4 rounded-2xl bg-card border border-border/55 flex items-center justify-center space-x-1.5 shadow-sm min-h-[40px] px-5">
+                      <div className="h-2 w-2 rounded-full bg-primary/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="h-2 w-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Chat Form panel */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendQuery();
+            }}
+            className="p-4 border-t border-border/55 shrink-0 bg-card flex items-center space-x-3.5 z-10"
+          >
+            <input
+              type="text"
+              placeholder="Ask Copilot about carbon forecasts or compliance checklists..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              disabled={isThinking || isStreaming}
+              className="flex-1 px-4 py-3 bg-muted/20 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none focus:border-primary/30 transition-colors disabled:opacity-50"
+            />
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!query.trim() || isThinking || isStreaming}
+              className="h-10.5 w-10.5 p-0 flex items-center justify-center rounded-xl shrink-0 shadow-sm"
+            >
+              <Send className="h-4 w-4" />
             </Button>
-          </div>
-
-          {/* Messages list */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-card/40 z-10">
-            <AnimatePresence initial={false}>
-              {messages.map((msg, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 10, scale: 0.99 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className={`flex space-x-3.5 max-w-[85%] ${
-                    msg.sender === 'user' ? 'ml-auto flex-row-reverse space-x-reverse' : ''
-                  }`}
-                >
-                  <div
-                    className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 border shadow-sm ${
-                      msg.sender === 'user'
-                        ? 'bg-secondary text-secondary-foreground border-secondary/10'
-                        : 'bg-primary/10 text-primary border-primary/5'
-                    }`}
-                  >
-                    {msg.sender === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                  </div>
-
-                  <div
-                    className={`p-3.5 rounded-2xl text-xs font-semibold leading-relaxed shadow-[0_2px_8px_rgba(28,38,30,0.01)] ${
-                      msg.sender === 'user'
-                        ? 'bg-secondary text-secondary-foreground rounded-tr-none'
-                        : 'bg-muted/70 text-foreground border border-border/30 rounded-tl-none'
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-
-          {/* Form input */}
-          <div className="p-4 border-t border-border/55 shrink-0 bg-card z-10">
-            <form onSubmit={handleSend} className="flex space-x-2.5 items-center">
-              <Input
-                placeholder="Ask about carbon trends, volunteer metrics, or audit status..."
-                value={query}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-                className="flex-1 bg-muted/30 focus:bg-card transition-colors duration-200 border-border/60"
-              />
-              <Button type="submit" className="shrink-0 h-10 w-10 p-0 flex items-center justify-center rounded-xl shadow-sm">
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
-          </div>
+          </form>
         </Card>
-
-        {/* Right Side: Info & Shortcuts (1 part) */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="p-1">
-            <CardHeader>
-              <CardTitle className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest flex items-center space-x-1.5">
-                <HelpCircle className="h-4 w-4 text-primary shrink-0" />
-                <span>Suggested Queries</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 pt-0">
-              <button
-                onClick={() => setQuery("Show carbon trends for facilities department.")}
-                className="w-full text-left p-3 rounded-xl border border-border/70 hover:border-primary/20 hover:bg-primary/5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
-              >
-                Show carbon trends for facilities
-              </button>
-              <button
-                onClick={() => setQuery("Are there any compliance warnings?")}
-                className="w-full text-left p-3 rounded-xl border border-border/70 hover:border-primary/20 hover:bg-primary/5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
-              >
-                Are there any compliance warnings?
-              </button>
-              <button
-                onClick={() => setQuery("Summarize the Anti-Bribery Policy.")}
-                className="w-full text-left p-3 rounded-xl border border-border/70 hover:border-primary/20 hover:bg-primary/5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
-              >
-                Summarize the Anti-Bribery Policy
-              </button>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-muted/10 border border-border/50 p-1">
-            <CardHeader>
-              <CardTitle className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest flex items-center space-x-1.5">
-                <Lightbulb className="h-4 w-4 text-primary shrink-0 animate-pulse" />
-                <span>Copilot Feed</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-0">
-              <div className="flex items-start space-x-2.5 text-xs">
-                <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                <span className="text-muted-foreground leading-relaxed">Scope 3 supply chain data is synced and ready.</span>
-              </div>
-              <div className="flex items-start space-x-2.5 text-xs">
-                <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                <span className="text-muted-foreground leading-relaxed">Generated Q2 energy reduction recommendation report.</span>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Right column: Copilot Insights dashboard widgets (1 part) */}
+        <div className="lg:col-span-1 h-[600px] overflow-y-auto pr-1">
+          <CopilotInsights onQuickAction={handleQuickAction} className="h-full" />
         </div>
       </div>
     </div>
