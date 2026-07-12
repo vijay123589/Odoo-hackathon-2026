@@ -10,16 +10,16 @@ export const Badge: React.FC<BadgeProps> = ({
   variant = 'neutral',
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors duration-200';
+  const baseStyles = 'inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-colors duration-200 select-none';
 
   const variants = {
-    primary: 'bg-primary/10 text-primary hover:bg-primary/20',
-    secondary: 'bg-secondary/10 text-secondary hover:bg-secondary/20',
-    success: 'bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20',
-    warning: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20',
-    error: 'bg-red-500/10 text-red-700 dark:text-red-400 hover:bg-red-500/20',
-    outline: 'border border-border text-foreground hover:bg-muted',
-    neutral: 'bg-muted text-muted-foreground hover:bg-muted/80',
+    primary: 'bg-primary/10 text-primary border border-primary/10',
+    secondary: 'bg-secondary/10 text-secondary border border-secondary/10',
+    success: 'bg-green-500/8 text-green-700 dark:text-green-400 border border-green-500/10',
+    warning: 'bg-amber-500/8 text-amber-700 dark:text-amber-400 border border-amber-500/10',
+    error: 'bg-destructive/8 text-destructive dark:text-red-400 border border-destructive/10',
+    outline: 'border border-border/80 text-foreground/80 hover:bg-muted',
+    neutral: 'bg-muted text-muted-foreground border border-border/20',
   };
 
   return (

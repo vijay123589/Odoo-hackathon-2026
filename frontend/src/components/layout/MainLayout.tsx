@@ -6,11 +6,26 @@ import { MobileDrawer } from './MobileDrawer';
 
 export const MainLayout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('sidebar-collapsed') === 'true';
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const newVal = !prev;
+      localStorage.setItem('sidebar-collapsed', String(newVal));
+      return newVal;
+    });
+  };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       {/* Desktop Sidebar (hidden on small/medium screens) */}
-      <Sidebar className="hidden md:flex shrink-0" />
+      <Sidebar
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+        className="hidden md:flex shrink-0"
+      />
 
       {/* Mobile Drawer Navigation */}
       <MobileDrawer isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
@@ -21,7 +36,7 @@ export const MainLayout: React.FC = () => {
         <TopNavbar onMenuToggle={() => setMobileMenuOpen((prev) => !prev)} />
 
         {/* Dynamic page content container */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-background relative z-10">
+        <main className="flex-1 overflow-y-auto p-8 bg-background relative z-10">
           <Outlet />
         </main>
       </div>

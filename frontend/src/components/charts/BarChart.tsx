@@ -24,7 +24,7 @@ export const BarChart: React.FC<BarChartProps> = ({
   data,
   xKey,
   dataKeys,
-  colors = ['#10b981', '#3b82f6', '#f59e0b'],
+  colors = ['#1A3B2B', '#8D7A68', '#8FA89B', '#C69B7B', '#475569'],
   height = 300,
 }) => {
   return (
