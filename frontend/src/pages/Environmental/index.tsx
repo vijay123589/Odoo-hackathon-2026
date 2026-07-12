@@ -29,8 +29,8 @@ export const Environmental: React.FC = () => {
   const [isLocalMode, setIsLocalMode] = useState(false);
 
   // New Transaction Form State
-  const [formDept, setFormDept] = useState('Facilities');
-  const [formActivity, setFormActivity] = useState('Grid Electricity');
+  const [formDept, setFormDept] = useState('');
+  const [formActivity, setFormActivity] = useState('');
   const [formValue, setFormValue] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -40,6 +40,9 @@ export const Environmental: React.FC = () => {
   // Emission Factors Database
   const [emissionFactors, setEmissionFactors] = useState<any[]>([]);
 
+  // Departments Database List
+  const [departmentsList, setDepartmentsList] = useState<any[]>([]);
+
   // Sustainability Goals Database
   const [sustainabilityGoals, setSustainabilityGoals] = useState<any[]>([]);
 
@@ -48,11 +51,12 @@ export const Environmental: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       const { default: api } = await import('@/api/axiosInstance');
-      const [txRes, factorsRes, goalsRes, dashRes] = await Promise.all([
+      const [txRes, factorsRes, goalsRes, dashRes, deptsRes] = await Promise.all([
         api.get('/v1/environment/carbon'),
-        api.get('/v1/environment/factors'),
+        api.get('/v1/environment/emission-factors'),
         api.get('/v1/environment/goals'),
         api.get('/v1/environment/dashboard'),
+        api.get('/v1/departments'),
       ]);
 
       const mappedTxs = txRes.data.data.map((t: any) => ({
@@ -61,12 +65,33 @@ export const Environmental: React.FC = () => {
         activity: t.activity_name,
         value: t.quantity,
         unit: 'units',
-        co2: t.emission_value,
-        date: t.date.split('T')[0],
+        co2: t.carbon_emission || t.emission_value || 0,
+        date: (t.transaction_date || t.date || '').split('T')[0],
         status: 'VERIFIED'
       }));
       setTransactions(mappedTxs);
-      setEmissionFactors(factorsRes.data.data);
+      
+      const rawFactors = factorsRes.data.data;
+      const mappedFactors = rawFactors.map((f: any) => ({
+        id: f.id,
+        source: f.activity_name,
+        scope: f.category,
+        factor: f.factor_value,
+        unit: f.unit,
+        region: 'Global',
+        status: 'ACTIVE'
+      }));
+      setEmissionFactors(mappedFactors);
+
+      const rawDepts = deptsRes.data.data;
+      setDepartmentsList(rawDepts);
+
+      if (rawDepts.length > 0 && !formDept) {
+        setFormDept(rawDepts[0].id);
+      }
+      if (rawFactors.length > 0 && !formActivity) {
+        setFormActivity(rawFactors[0].id);
+      }
       
       const mappedGoals = goalsRes.data.data.map((g: any) => ({
         id: g.id,
@@ -196,59 +221,41 @@ export const Environmental: React.FC = () => {
   // Add Transaction Handler
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formValue || isNaN(Number(formValue))) return;
+    if (!formValue || isNaN(Number(formValue)) || !formDept || !formActivity) return;
 
     const val = Number(formValue);
     
-    // Map human activity names to model categories
-    const activityMap: Record<string, string> = {
-      'Grid Electricity': 'electricity',
-      'Diesel Transport Fuel': 'diesel',
-      'Business Flight Miles': 'flights',
-      'Natural Gas Burners': 'natural_gas',
-    };
-    const activityType = activityMap[formActivity] || 'electricity';
+    // Find the selected factor from list to get details
+    const selectedFactor = emissionFactors.find(f => f.id === formActivity);
+    const activityName = selectedFactor ? selectedFactor.source : 'Carbon Emission';
+    const activityType = selectedFactor ? selectedFactor.scope : 'electricity';
+    const unit = selectedFactor ? selectedFactor.unit : 'kWh';
 
-    let unit = 'kWh';
-    if (activityType === 'diesel') unit = 'Liters';
-    else if (activityType === 'flights') unit = 'km';
-    else if (activityType === 'natural_gas') unit = 'm3';
+    // Retrieve active logged in user session UUID
+    const savedUserStr = localStorage.getItem('esg_session_user');
+    const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+    const user_id = savedUser ? savedUser.id : null;
 
     try {
       const { default: api } = await import('@/api/axiosInstance');
 
       // 1. Calculate
       const calcRes = await api.post('/v1/environment/calculate', {
-        activityType,
+        activityType: activityType.toLowerCase(),
         value: val,
         unit,
         region: 'US',
       });
 
       const data = calcRes.data;
-      setIsLocalMode(data.provider === 'Local EcoSphere');
+      setIsLocalMode(data.provider === 'Local EcoSphere Fallback');
 
-      // Map dept to ID
-      const deptMap: Record<string, string> = {
-        'Facilities': 'dep-1',
-        'Logistics': 'dep-2',
-        'Engineering': 'dep-3',
-        'HR Office': 'dep-3',
-        'Executive Office': 'dep-1'
-      };
-      
-      const factorMap: Record<string, string> = {
-        'electricity': 'fac-1',
-        'diesel': 'fac-2',
-        'natural_gas': 'fac-3',
-        'flights': 'fac-4'
-      };
-
-      // 2. Save
+      // 2. Save Transaction in Postgres via FastAPI
       await api.post('/v1/environment/carbon', {
-        department_id: deptMap[formDept] || 'dep-1',
-        emission_factor_id: factorMap[activityType] || 'fac-1',
-        activity_name: `${formActivity} Usage`,
+        user_id,
+        department_id: formDept,
+        emission_factor_id: formActivity,
+        activity_name: activityName,
         quantity: val
       });
 
@@ -265,13 +272,17 @@ export const Environmental: React.FC = () => {
         flights: 0.00018,
         natural_gas: 0.00189,
       };
-      const factor = localFactors[activityType] || 0.000409;
+      const factor = localFactors[activityType.toLowerCase()] || 0.000409;
       const co2Val = parseFloat((val * factor).toFixed(4));
+
+      // Resolve human readable department name for display
+      const selectedDept = departmentsList.find(d => d.id === formDept);
+      const deptName = selectedDept ? selectedDept.name : 'Facilities';
 
       const fallbackTx: CarbonTx = {
         id: `tx-${Date.now()}`,
-        dept: formDept,
-        activity: `${formActivity} Usage (Local Fallback)`,
+        dept: deptName,
+        activity: `${activityName} (Local Fallback)`,
         value: val,
         unit,
         co2: co2Val,
@@ -558,11 +569,11 @@ export const Environmental: React.FC = () => {
               onChange={(e) => setFormDept(e.target.value)}
               className="w-full px-3 py-2 bg-muted/20 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none"
             >
-              <option value="Facilities">Facilities Department</option>
-              <option value="Logistics">Logistics Division</option>
-              <option value="Engineering">Engineering Labs</option>
-              <option value="HR Office">Human Resources</option>
-              <option value="Executive Office">Executive Boardroom</option>
+              {departmentsList.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.code})
+                </option>
+              ))}
             </select>
           </div>
 
@@ -573,10 +584,11 @@ export const Environmental: React.FC = () => {
               onChange={(e) => setFormActivity(e.target.value)}
               className="w-full px-3 py-2 bg-muted/20 border border-border/60 rounded-xl text-xs font-semibold focus:outline-none"
             >
-              <option value="Grid Electricity">Grid Electricity Usage (Scope 2)</option>
-              <option value="Diesel Transport Fuel">Diesel Transport Fuel (Scope 1)</option>
-              <option value="Business Flight Miles">Business Flight Miles (Scope 3)</option>
-              <option value="Natural Gas Burners">Natural Gas Burners (Scope 1)</option>
+              {emissionFactors.map((ef) => (
+                <option key={ef.id} value={ef.id}>
+                  {ef.source} ({ef.scope})
+                </option>
+              ))}
             </select>
           </div>
 
