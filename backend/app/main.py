@@ -11,6 +11,8 @@ from app.middleware.logging import LoggingMiddleware
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.departments import router as departments_router
+from app.api.environment import router as environment_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +49,8 @@ app.add_middleware(
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(departments_router, prefix=settings.API_V1_STR)
+app.include_router(environment_router, prefix=settings.API_V1_STR)
+
 
 # ------------ GLOBAL EXCEPTION HANDLERS ---------
 
