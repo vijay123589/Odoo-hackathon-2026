@@ -1,0 +1,213 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+  AUDITOR
+}
+
+model User {
+  id                  String              @id @default(uuid())
+  email               String              @unique
+  password            String
+  firstName           String
+  lastName            String
+  role                Role                @default(EMPLOYEE)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  employee            Employee?
+  notifications       Notification[]
+  recordedTransactions CarbonTransaction[]
+  audits              Audit[]
+}
+
+model Department {
+  id                 String            @id @default(uuid())
+  name               String            @unique
+  code               String            @unique
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  employees          Employee[]
+  carbonTransactions CarbonTransaction[]
+  scores             DepartmentScore[]
+}
+
+model Employee {
+  id            String                  @id @default(uuid())
+  userId        String?                 @unique
+  user          User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  departmentId  String
+  department    Department              @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  firstName     String
+  lastName      String
+  email         String                  @unique
+  phone         String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  participations EmployeeParticipation[]
+  challenges    ChallengeParticipation[]
+  rewards       Reward[]
+}
+
+model CarbonTransaction {
+  id              String      @id @default(uuid())
+  departmentId    String
+  department      Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  activityType    String
+  value           Float
+  unit            String
+  co2Amount       Float
+  transactionDate DateTime    @default(now())
+  recordedById    String
+  recordedBy      User        @relation(fields: [recordedById], references: [id])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model EmissionFactor {
+  id           String   @id @default(uuid())
+  activityType String   @unique
+  factor       Float
+  unit         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CSRActivity {
+  id             String                  @id @default(uuid())
+  title          String
+  description    String
+  date           DateTime
+  location       String
+  status         String                  @default("PLANNED")
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  participations EmployeeParticipation[]
+}
+
+model EmployeeParticipation {
+  id               String      @id @default(uuid())
+  employeeId       String
+  employee         Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  activityId       String
+  activity         CSRActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  hoursVolunteered Float
+  role             String?
+  createdAt        DateTime    @default(now())
+}
+
+model Challenge {
+  id             String                   @id @default(uuid())
+  title          String
+  description    String
+  startDate      DateTime
+  endDate        DateTime
+  points         Int
+  status         String                   @default("ACTIVE")
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  participations ChallengeParticipation[]
+}
+
+model ChallengeParticipation {
+  id          String    @id @default(uuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  status      String    @default("JOINED")
+  progress    Float     @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  iconUrl     String
+  criteria    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  rewards     Reward[]
+}
+
+model Reward {
+  id           String    @id @default(uuid())
+  employeeId   String
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  badgeId      String?
+  badge        Badge?    @relation(fields: [badgeId], references: [id], onDelete: SetNull)
+  pointsEarned Int
+  reason       String
+  createdAt    DateTime  @default(now())
+}
+
+model Policy {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  category  String
+  status    String   @default("DRAFT")
+  version   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  audits    Audit[]
+}
+
+model Audit {
+  id               String            @id @default(uuid())
+  policyId         String
+  policy           Policy            @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  auditorId        String
+  auditor          User              @relation(fields: [auditorId], references: [id])
+  auditDate        DateTime
+  findings         String
+  status           String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  complianceIssues ComplianceIssue[]
+}
+
+model ComplianceIssue {
+  id          String   @id @default(uuid())
+  auditId     String?
+  audit       Audit?   @relation(fields: [auditId], references: [id], onDelete: SetNull)
+  title       String
+  description String
+  severity    String
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DepartmentScore {
+  id                 String     @id @default(uuid())
+  departmentId       String
+  department         Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  scorePeriod        String
+  environmentalScore Float
+  socialScore        Float
+  governanceScore    Float
+  totalScore         Float
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
