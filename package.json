@@ -1,0 +1,21 @@
+{
+  "name": "ecosphere-esg-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EcoSphere ESG Management Platform Root Workspace",
+  "workspaces": [
+    "shared",
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run dev --workspace=backend\"",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "format": "prettier --write \".\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prettier": "^3.4.2"
+  }
+}

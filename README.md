@@ -1,106 +1,102 @@
-# ESG Sustainability Tracker - Environmental Module (Member 2)
+# EcoSphere ESG Management Platform
 
-This repository contains the implementation plan and codebase for the **Environmental Module (Member 2)** of the Enterprise ESG & Sustainability Tracker.
+Welcome to the **EcoSphere ESG Management Platform**, an enterprise-grade sustainability, carbon ledger, and compliance tracking workspace built for the **Odoo Hackathon 2026**.
 
----
-
-## 📋 Role & Responsibilities
-As **Member 2**, you are responsible for tracking, calculating, and reporting environmental impact metrics, specifically:
-* **Emission Factors**: Reference values representing greenhouse gas emissions per unit of activity.
-* **Carbon Transactions**: Logs of activities mapped to emission factors to calculate carbon footprints.
-* **Sustainability Goals**: Targets set to reduce environmental footprint, tracked over time.
-* **ESG Score Calculation**: Dynamic deduction/reward system indicating environmental performance.
-* **Dashboard & Reports**: Consolidated metrics serving the frontend and reporting tools.
+This repository is initialized with a robust, strict-TypeScript monorepo foundation that separates concerns between Frontend, Backend, and Shared packages, allowing all 4 team members to collaborate in parallel.
 
 ---
 
-## 🛠️ Proposed File Structure
-To seamlessly integrate with Member 1 (Kumaran)'s backend framework, all files are structured inside `backend/app/` using relative imports:
+## 🚀 Quick Start
+
+### 1. Prerequisites
+Make sure you have the following installed on your machine:
+* **Node.js** (v18+ recommended)
+* **PostgreSQL** running locally on port `5432`
+
+### 2. Setup Environment
+Ensure your local PostgreSQL password matches the default configuration in `backend/.env` (default is `12345678`):
+```env
+DATABASE_URL="postgresql://postgres:12345678@localhost:5432/ecosphere?schema=public"
+```
+*(If your local PostgreSQL credentials differ, update the password in `backend/.env` accordingly).*
+
+### 3. Installation & Database Sync
+Run the following commands from the **root directory** of the repository:
+
+```bash
+# 1. Install all dependencies across all workspaces
+npm install
+
+# 2. Run Prisma migrations to create the database tables
+npm run prisma:migrate --workspace=backend -- --name init
+
+# 3. Build all workspace projects to verify compilation
+npm run build
+```
+
+### 4. Running the Development Server
+Run the frontend and backend servers concurrently:
+```bash
+npm run dev
+```
+* **Frontend UI**: http://localhost:3000 (React, Vite)
+* **Backend API**: http://localhost:5000 (Express)
+
+To log in to the portal, you can use:
+* **Email**: `admin@ecosphere.com` (forces Admin role layout) or any employee email
+* **Password**: `password123` (or any dummy password)
+
+---
+
+## 📁 Repository Directory Structure
 
 ```text
-backend/app/
-├── models/
-│   └── environment.py       # SQLAlchemy database models
-├── schemas/
-│   └── environment.py       # Pydantic validation schemas
-├── routers/
-│   └── environment.py       # FastAPI CRUD and dashboard router
-└── utils/
-    └── calculator.py        # ESG Score calculation logic
+├── .github/workflows/          # Continuous Integration configs
+├── docs/                       # Developer guidelines and collaboration rules
+├── shared/                     # Shared monorepo packages
+│   └── types/index.ts          # Common TypeScript interfaces (Models & Enums)
+├── backend/                    # Node.js + Express API Server
+│   ├── prisma/                 # Database schema models (17 entities) & migrations
+│   └── src/
+│       ├── index.ts            # API Server entry point & routing hooks
+│       ├── controllers/        # Request handlers & parsing
+│       ├── routes/             # Express routes definition
+│       └── services/           # DB transactional logic
+└── frontend/                   # React 19 + Vite client
+    ├── index.html              # Main mount page
+    ├── vite.config.ts          # Absolute path mappings & proxies
+    ├── src/
+        ├── App.tsx             # Providers wrapper (Query, Auth, Theme)
+        ├── main.tsx            # Application entry mount
+        ├── components/
+        │   ├── ui/             # Reusable base Tailwind components (Button, Modal, Card...)
+        │   ├── layout/         # Enterprise Sidebar, Navbar, Mobile Drawer
+        │   └── charts/         # Reusable Recharts chart templates
+        ├── pages/              # Lazy-loaded views (Dashboard, Environmental, Social, Copilot...)
+        ├── contexts/           # Auth and Theme State providers
+        └── routes/             # AppRoutes config & lazy loading setup
 ```
 
 ---
 
-## 💾 Database Schema (`backend/app/models/environment.py`)
+## 🛠️ Developer Commands Reference
 
-### 1. `EmissionFactors`
-Stores conversion rates for various categories of activities (e.g., electricity, fuel consumption, logistics).
-* `id` (Integer, Primary Key)
-* `category` (String, Unique Index) — e.g., `"Electricity"`, `"Diesel"`, `"Flight"`
-* `factor` (Float) — conversion rate in kg CO2 per unit
-* `unit` (String) — e.g., `"kWh"`, `"liters"`, `"km"`
-* `description` (String)
-* `created_at` (DateTime, Default: current time)
+Run these commands from the **root** folder:
 
-### 2. `CarbonTransactions`
-Records carbon-emitting events associated with departments.
-* `id` (Integer, Primary Key)
-* `department_id` (String) — identifier of the emitting department
-* `emission_factor_id` (Integer, Foreign Key referencing `EmissionFactors.id`)
-* `activity_name` (String) — e.g., `"Logistics delivery run"`, `"HQ AC Electricity usage"`
-* `quantity` (Float) — number of units consumed
-* `emission_value` (Float) — auto-calculated as `quantity * EmissionFactors.factor`
-* `date` (DateTime, Default: current time)
-* `created_by` (String) — user who logged the transaction
-
-### 3. `EnvironmentalGoals`
-Tracks reduction goals and progress deadlines.
-* `id` (Integer, Primary Key)
-* `title` (String) — e.g., `"Reduce logistics emissions by 20%"`
-* `target_value` (Float) — target emission limit in kg CO2
-* `current_value` (Float) — current cumulative emissions (defaults to 0.0)
-* `deadline` (DateTime)
-* `status` (String) — `"Active"`, `"Achieved"`, or `"Failed"`
+| Command | Action |
+| :--- | :--- |
+| `npm install` | Installs dependencies globally and links workspaces |
+| `npm run dev` | Spins up Vite dev server (port 3000) and Express (port 5000) in parallel |
+| `npm run build` | Validates TypeScript check and compiles production bundles |
+| `npm run format` | Runs Prettier format rules workspace-wide |
+| `npm run prisma:generate --workspace=backend` | Re-generates the local Prisma Client |
+| `npm run prisma:migrate --workspace=backend` | Generates a new SQL database migration |
 
 ---
 
-## 🔌 API Endpoints (`backend/app/routers/environment.py`)
-
-### **Emission Factors**
-* `GET /environment/factors` — List all conversion factors.
-* `POST /environment/factors` — Create a new factor.
-* `PUT /environment/factors/{id}` — Update a factor.
-* `DELETE /environment/factors/{id}` — Delete a factor.
-
-### **Carbon Transactions**
-* `GET /environment/transactions` — Fetch all transactions.
-* `POST /environment/transactions` — Add a transaction. Computes `emission_value` automatically.
-* `PUT /environment/transactions/{id}` — Edit transaction quantities. Recalculates emissions.
-* `DELETE /environment/transactions/{id}` — Remove a transaction.
-
-### **Sustainability Goals**
-* `GET /environment/goals` — Fetch goals.
-* `POST /environment/goals` — Define a new goal.
-* `PATCH /environment/goals/{id}` — Adjust current progress value or goal status.
-* `DELETE /environment/goals/{id}` — Remove a goal.
-
-### **Dashboard & Reporting**
-* `GET /environment/dashboard` — Unified dashboard endpoint returning:
-  * `total_emission`: Sum of all `emission_value` from transactions.
-  * `goal_progress`: Progress indicator (percentage of achieved goals).
-  * `monthly_emission`: Chronological breakdown of emissions.
-  * `top_department`: Department with the highest carbon footprint.
-* `GET /environment/report` — Deeper breakdown of trends, department summaries, and active goals.
-
----
-
-## 📈 ESG score Calculation (`backend/app/utils/calculator.py`)
-Computes a dynamic environmental performance score using the function `calculate_environment_score(db: Session) -> float`:
-1. Starts at a baseline of **100**.
-2. **Deductions**:
-   * **-5 points** for every overdue goal (current date is past deadline and status is `"Active"`).
-   * **-3 points** for every 100 kg CO2 exceeded on active goals (where `current_value > target_value`).
-3. **Bonuses**:
-   * **+5 points** for each achieved goal (status is `"Achieved"`).
-4. **Constraints**:
-   * Score is bounded between **0** and **100**.
+## 🤝 Collaboration Assignments (Hackathon Plan)
+To work in parallel with zero merge conflicts, we recommend dividing task areas:
+1. **Developer 1 (Auth & Governance)**: Build out user profile registration, audit ledger, and policy endpoints.
+2. **Developer 2 (Environmental Carbon Ledger)**: Build carbon transactions input grids, department calculators, and Scope emissions.
+3. **Developer 3 (Social volunteering & Rewards)**: Build community CSR activities, gamified employee challenges, and badge awarding.
+4. **Developer 4 (AI Advisor & Reports)**: Integrate AI Copilot chat services (OpenAI/Gemini integrations) and generate PDF reports.
