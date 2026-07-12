@@ -1,12 +1,17 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Initialize Gemini API
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
 // Middleware
 app.use(cors());
@@ -45,6 +50,40 @@ app.use('/api/challenges', (req: Request, res: Response) => {
 
 app.use('/api/compliance', (req: Request, res: Response) => {
   res.status(501).json({ message: 'Compliance/Policy endpoint not implemented' });
+});
+
+app.post('/api/copilot/chat', async (req: Request, res: Response) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
+  if (!genAI) {
+    return res.status(503).json({ error: 'Gemini API is not configured on the backend server' });
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const systemPrompt = `
+You are the EcoSphere ESG Intelligence Assistant, a premium AI sustainability analyst.
+You help corporate users analyze Scope 1, 2, and 3 emissions, carbon accounting ledger transactions, compliance frameworks (GRI, SASB), and reduction target pathways.
+
+Rules for response formatting:
+1. Provide concise, premium, executive-level insights. Use markdown bullet points and headings.
+2. If you want to render a visual chart to help illustrate the data, append exactly one of the following tags at the very end of your response:
+   - [CHART:bar] to show comparison between categories/departments.
+   - [CHART:pie] to show breakdown/distribution of a total value.
+   - [CHART:area] to show cumulative trends or pathways over time.
+   - [CHART:radar] to show multi-variable compliance indicators.
+3. If you want to present a tabular log of items, use markdown table formatting.
+`;
+    const result = await model.generateContent([systemPrompt, prompt]);
+    const responseText = result.response.text();
+    res.json({ text: responseText });
+  } catch (error: any) {
+    console.error('Gemini API Error:', error);
+    res.status(500).json({ error: 'Failed to process prompt with GenAI API', message: error.message });
+  }
 });
 
 // Global error handler
