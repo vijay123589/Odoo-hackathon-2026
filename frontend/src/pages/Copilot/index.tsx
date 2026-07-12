@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { CopilotHistory, ChatSession } from '@/components/copilot/CopilotHistory';
-import { CopilotInsights } from '@/components/copilot/CopilotInsights';
 import { CopilotMessage, Message } from '@/components/copilot/CopilotMessage';
 import {
   Sparkles,
@@ -14,7 +12,6 @@ import {
 } from 'lucide-react';
 
 export const AICopilot: React.FC = () => {
-  const navigate = useNavigate();
 
   // History list state
   const [sessions, setSessions] = useState<ChatSession[]>([
@@ -232,17 +229,6 @@ export const AICopilot: React.FC = () => {
     );
   };
 
-  // Right sidebar quick action navigation mapper
-  const handleQuickAction = (actionKey: string) => {
-    if (actionKey === 'reports') {
-      navigate('/reports');
-    } else if (actionKey === 'environmental') {
-      navigate('/environmental');
-    } else {
-      navigate('/dashboard');
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header section */}
@@ -258,7 +244,7 @@ export const AICopilot: React.FC = () => {
         </div>
       </div>
 
-      {/* Workspace Tri-pane grid layout */}
+      {/* Workspace 2-pane grid layout */}
       <div className="grid gap-6 lg:grid-cols-4 items-start">
         {/* Left column: Session History (1 part) */}
         <div className="lg:col-span-1 h-[600px]">
@@ -276,8 +262,8 @@ export const AICopilot: React.FC = () => {
           />
         </div>
 
-        {/* Center column: Interactive chat canvas (2 parts) */}
-        <Card className="lg:col-span-2 flex flex-col h-[600px] bg-card border border-border/50 relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(28,38,30,0.03)] p-0">
+        {/* Center column: Interactive chat canvas (3 parts) */}
+        <Card className="lg:col-span-3 flex flex-col h-[600px] bg-card border border-border/50 relative overflow-hidden shadow-[0_20px_50px_-12px_rgba(28,38,30,0.03)] p-0">
           {/* Subtle decoration circles */}
           <div className="absolute top-[-10%] right-[-10%] w-[35%] h-[35%] rounded-full bg-primary/3 filter blur-[80px] pointer-events-none" />
 
@@ -384,10 +370,6 @@ export const AICopilot: React.FC = () => {
             </Button>
           </form>
         </Card>
-        {/* Right column: Copilot Insights dashboard widgets (1 part) */}
-        <div className="lg:col-span-1 h-[600px] overflow-y-auto pr-1">
-          <CopilotInsights onQuickAction={handleQuickAction} className="h-full" />
-        </div>
       </div>
     </div>
   );
