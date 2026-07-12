@@ -81,9 +81,9 @@ class ReportsService:
 
     def get_esg_score_report(self):
         """Calculate composite index scoring out of 100 for each ESG pillar."""
-        # 1. Environmental: based on goal completion rate
-        env_rep = self.get_environmental_report()
-        env_score = env_rep["goal_achievement_rate"]
+        # 1. Environmental: dynamic ESG score calculation
+        from app.utils.calculator import calculate_environment_score
+        env_score = calculate_environment_score(self.db)
 
         # 2. Social: based on employee participation rate
         soc_rep = self.get_social_report()

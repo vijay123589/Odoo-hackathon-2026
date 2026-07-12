@@ -204,3 +204,177 @@ async def delete_goal(
 ):
     service.delete_goal(id)
     return APIResponse(success=True, message="Environmental goal deleted successfully", data=None)
+
+
+# --- ADDITIONAL AGGREGATE & CALCULATOR ENDPOINTS ---
+
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from app.utils.calculator import calculate_environment_score
+from app.models.environmental import CarbonTransaction, EnvironmentalGoal, EmissionFactor
+from app.models.department import DepartmentORM
+
+class CalculatePayload(BaseModel):
+    activityType: str
+    value: float
+    unit: str
+    region: Optional[str] = "US"
+
+@router.post("/calculate", summary="Stateless carbon calculation (Vijay's frontend specifications)")
+async def calculate_carbon_estimate(
+    payload: CalculatePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Try finding factor in SQLite DB
+    factor_orm = db.query(EmissionFactor).filter(
+        EmissionFactor.category == payload.activityType.lower()
+    ).first()
+    
+    if factor_orm:
+        factor_val = factor_orm.factor_value
+        provider = "Local EcoSphere DB"
+    else:
+        # Fallback to hardcoded local multipliers matching Vijay's engine
+        local_fallbacks = {
+            "electricity": 0.000409,
+            "diesel": 0.00263,
+            "petrol": 0.00231,
+            "natural_gas": 0.00189,
+            "flights": 0.00018,
+            "train": 0.000041,
+            "bus": 0.000096,
+            "shipping": 0.000161,
+            "waste": 0.450,
+            "water": 0.000298,
+            "paper": 0.000919,
+            "plastic": 0.00196
+        }
+        factor_val = local_fallbacks.get(payload.activityType.lower(), 0.000409)
+        provider = "Local EcoSphere Fallback"
+        
+    co2e_value = float(payload.value * factor_val)
+    
+    return {
+        "provider": provider,
+        "input": {
+            "activityType": payload.activityType,
+            "value": payload.value,
+            "unit": payload.unit,
+            "region": payload.region
+        },
+        "emissionFactor": factor_val,
+        "co2eValue": round(co2e_value, 4),
+        "confidence": "HIGH" if factor_orm else "MEDIUM",
+        "timestamp": datetime.now(timezone.utc).isoformat() if hasattr(datetime, 'now') else datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/dashboard", response_model=APIResponse[Dict[str, Any]], summary="Environmental Dashboard Aggregations")
+async def get_dashboard_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    txs = db.query(CarbonTransaction).all()
+    total_emission = sum(t.carbon_emission for t in txs)
+
+    # Goals completed vs total
+    goals = db.query(EnvironmentalGoal).all()
+    total_goals = len(goals)
+    completed_goals = sum(1 for g in goals if g.status == "Completed")
+    goal_progress = int((completed_goals / total_goals) * 100) if total_goals > 0 else 0
+
+    # Monthly groupings
+    monthly_map = {}
+    for t in txs:
+        m_key = t.transaction_date.strftime("%Y-%m")
+        monthly_map[m_key] = monthly_map.get(m_key, 0.0) + t.carbon_emission
+        
+    monthly_list = [
+        {"month": m, "emission": round(v, 4)}
+        for m, v in sorted(monthly_map.items())
+    ]
+
+    # Top department
+    dept_map = {}
+    for t in txs:
+        dept_map[t.department_id] = dept_map.get(t.department_id, 0.0) + t.carbon_emission
+        
+    top_dept_name = "N/A"
+    if dept_map:
+        top_dept_id = max(dept_map, key=dept_map.get)
+        dep_obj = db.query(DepartmentORM).filter(DepartmentORM.id == top_dept_id).first()
+        top_dept_name = dep_obj.name if dep_obj else str(top_dept_id)
+
+    # Dynamic ESG Environmental Score
+    score = calculate_environment_score(db)
+
+    return APIResponse(
+        success=True,
+        message="Environmental dashboard summary generated",
+        data={
+            "total_emission": round(total_emission, 4),
+            "goal_progress": goal_progress,
+            "monthly_emission": monthly_list,
+            "top_department": top_dept_name,
+            "environment_score": round(score, 1)
+        }
+    )
+
+
+@router.get("/report", response_model=APIResponse[Dict[str, Any]], summary="Environmental Report Breakdown")
+async def get_report_breakdown(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    txs = db.query(CarbonTransaction).all()
+    total_emission = sum(t.carbon_emission for t in txs)
+
+    dept_map = {}
+    for t in txs:
+        dept_map[t.department_id] = dept_map.get(t.department_id, 0.0) + t.carbon_emission
+        
+    emissions_summary = {}
+    for d_id, val in dept_map.items():
+        dep_obj = db.query(DepartmentORM).filter(DepartmentORM.id == d_id).first()
+        name = dep_obj.name if dep_obj else str(d_id)
+        emissions_summary[name] = round(val, 4)
+        
+    highest_dept = max(emissions_summary, key=emissions_summary.get) if emissions_summary else "N/A"
+
+    monthly_map = {}
+    for t in txs:
+        m_key = t.transaction_date.strftime("%Y-%m")
+        monthly_map[m_key] = monthly_map.get(m_key, 0.0) + t.carbon_emission
+        
+    monthly_trends = {m: round(v, 4) for m, v in sorted(monthly_map.items())}
+
+    active_goals = [
+        {
+            "id": str(g.id),
+            "title": g.title,
+            "description": g.description,
+            "target_value": g.target_value,
+            "current_value": g.current_value,
+            "unit": g.unit,
+            "deadline": g.deadline.isoformat(),
+            "status": g.status
+        }
+        for g in db.query(EnvironmentalGoal).filter(EnvironmentalGoal.status == "In Progress").all()
+    ]
+
+    score = calculate_environment_score(db)
+
+    return APIResponse(
+        success=True,
+        message="Environmental report compiled successfully",
+        data={
+            "total_emissions": round(total_emission, 4),
+            "highest_department": highest_dept,
+            "monthly_trends": monthly_trends,
+            "active_goals": active_goals,
+            "emissions_summary": emissions_summary,
+            "environment_score": round(score, 1)
+        }
+    )
+
