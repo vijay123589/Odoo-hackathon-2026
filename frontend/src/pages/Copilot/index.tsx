@@ -69,62 +69,57 @@ export const AICopilot: React.FC = () => {
 
   // Streaming Typewriter simulation
   const simulateBotResponse = (text: string, chartType: any = null, tableCols: any = null, tableData: any = null) => {
-    setIsThinking(true);
+    setIsStreaming(true);
+    let currentLen = 0;
+    const fullText = text;
     
-    setTimeout(() => {
-      setIsThinking(false);
-      setIsStreaming(true);
-      let currentLen = 0;
-      const fullText = text;
-      
-      const newBotMsg: Message = {
-        sender: 'bot',
-        text: '',
-        chartType,
-        tableColumns: tableCols,
-        tableData: tableData,
+    const newBotMsg: Message = {
+      sender: 'bot',
+      text: '',
+      chartType,
+      tableColumns: tableCols,
+      tableData: tableData,
+    };
+
+    setSessionsMessages((prev) => {
+      const currentMsgs = prev[activeSessionId] || [];
+      return {
+        ...prev,
+        [activeSessionId]: [...currentMsgs, newBotMsg],
       };
+    });
 
-      setSessionsMessages((prev) => {
-        const currentMsgs = prev[activeSessionId] || [];
-        return {
-          ...prev,
-          [activeSessionId]: [...currentMsgs, newBotMsg],
-        };
-      });
-
-      const timer = setInterval(() => {
-        currentLen += 8;
-        if (currentLen >= fullText.length) {
-          clearInterval(timer);
-          setIsStreaming(false);
-          setSessionsMessages((prev) => {
-            const currentMsgs = [...(prev[activeSessionId] || [])];
-            if (currentMsgs.length > 0) {
-              currentMsgs[currentMsgs.length - 1].text = fullText;
-            }
-            return {
-              ...prev,
-              [activeSessionId]: currentMsgs,
-            };
-          });
-        } else {
-          setSessionsMessages((prev) => {
-            const currentMsgs = [...(prev[activeSessionId] || [])];
-            if (currentMsgs.length > 0) {
-              currentMsgs[currentMsgs.length - 1].text = fullText.slice(0, currentLen);
-            }
-            return {
-              ...prev,
-              [activeSessionId]: currentMsgs,
-            };
-          });
-        }
-      }, 25);
-    }, 1000);
+    const timer = setInterval(() => {
+      currentLen += 8;
+      if (currentLen >= fullText.length) {
+        clearInterval(timer);
+        setIsStreaming(false);
+        setSessionsMessages((prev) => {
+          const currentMsgs = [...(prev[activeSessionId] || [])];
+          if (currentMsgs.length > 0) {
+            currentMsgs[currentMsgs.length - 1].text = fullText;
+          }
+          return {
+            ...prev,
+            [activeSessionId]: currentMsgs,
+          };
+        });
+      } else {
+        setSessionsMessages((prev) => {
+          const currentMsgs = [...(prev[activeSessionId] || [])];
+          if (currentMsgs.length > 0) {
+            currentMsgs[currentMsgs.length - 1].text = fullText.slice(0, currentLen);
+          }
+          return {
+            ...prev,
+            [activeSessionId]: currentMsgs,
+          };
+        });
+      }
+    }, 25);
   };
 
-  const handleSendQuery = (customQuery?: string) => {
+  const handleSendQuery = async (customQuery?: string) => {
     const textToSend = customQuery || query;
     if (!textToSend.trim() || isThinking || isStreaming) return;
 
@@ -138,50 +133,94 @@ export const AICopilot: React.FC = () => {
       };
     });
     setQuery('');
+    setIsThinking(true);
 
-    // Predefined AI responses depending on preset questions
-    const qLower = textToSend.toLowerCase();
-    
-    if (qLower.includes('summarize esg') || qLower.includes('performance')) {
-      simulateBotResponse(
-        "EcoSphere ESG performance summary for FY2026 shows positive trends:\n- Carbon Intensity decreased by 12.4% vs Q1.\n- CSR volunteering aggregates reached 465 total hours.\n- Compliance auditor logs scored 96.2%.\n\nSee distribution weightages below:",
-        'pie'
-      );
-    } else if (qLower.includes('department') || qLower.includes('emits') || qLower.includes('most carbon')) {
-      simulateBotResponse(
-        "Facilities department leads corporate emissions under grid electricity usage (Scope 2). Let's inspect department logs:",
-        'bar',
-        ['Department', 'Activity Type', 'Annual CO2 Equivalent'],
-        [
-          { 'Department': 'Facilities', 'Activity Type': 'Electricity usage', 'Annual CO2 Equivalent': '210 t' },
-          { 'Department': 'Logistics', 'Activity Type': 'Diesel distribution', 'Annual CO2 Equivalent': '140 t' },
-          { 'Department': 'Engineering', 'Activity Type': 'Systems build', 'Annual CO2 Equivalent': '85 t' },
-        ]
-      );
-    } else if (qLower.includes('compliance') || qLower.includes('risk')) {
-      simulateBotResponse(
-        "ESG compliance scan indicates a low overall risk profile. Check priority items below:\n- Logistics Scope 1 diesel audits are due in 8 days.\n- Scope 3 supply chain logs show vendor reporting gaps in Facilities.\n\nCompliance benchmarks compared below:",
-        'radar'
-      );
-    } else if (qLower.includes('trend') || qLower.includes('predict')) {
-      simulateBotResponse(
-        "Sustainability forecasting indicates a steady decline in Scope 2 footprints due to scheduled renewable energy transfers. Our 6-month carbon ledger trend line is projected as follows:",
-        'area'
-      );
-    } else if (qLower.includes('audit') || qLower.includes('overdue')) {
-      simulateBotResponse(
-        "There are currently 0 overdue audits. However, 2 compliance reviews are approaching their dates:\n1. Scope 3 Supply Chain Audit (Due in 8 days)\n2. CSR Volunteering Log Verification (Due in 12 days)",
-        null,
-        ['Audit Task', 'Scope Domain', 'Due Date', 'Status'],
-        [
-          { 'Audit Task': 'Scope 3 Supply Chain', 'Scope Domain': 'Environmental', 'Due Date': 'July 20, 2026', 'Status': 'PENDING' },
-          { 'Audit Task': 'CSR volunteer ledger verify', 'Scope Domain': 'Social', 'Due Date': 'July 24, 2026', 'Status': 'DRAFT' },
-        ]
-      );
-    } else {
-      simulateBotResponse(
-        `I've analyzed your inquiry regarding "${textToSend}". Based on our active ledger scopes,Facilities Scope 2 accounts for 54% of emissions. Shift logistics flights to high-speed rail to maintain net-zero target paths.`
-      );
+    try {
+      // 1. Attempt to fetch from the Express AI endpoint
+      const response = await fetch('http://localhost:5000/api/copilot/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: textToSend }),
+      });
+
+      if (!response.ok) {
+        throw new Error('API limit reached or backend offline');
+      }
+
+      const data = await response.json();
+      setIsThinking(false);
+
+      // Parse AI response for custom chart keywords
+      let chartType: any = null;
+      let cleanedText = data.text || '';
+      
+      if (cleanedText.includes('[CHART:bar]')) {
+        chartType = 'bar';
+        cleanedText = cleanedText.replace('[CHART:bar]', '');
+      } else if (cleanedText.includes('[CHART:area]')) {
+        chartType = 'area';
+        cleanedText = cleanedText.replace('[CHART:area]', '');
+      } else if (cleanedText.includes('[CHART:radar]')) {
+        chartType = 'radar';
+        cleanedText = cleanedText.replace('[CHART:radar]', '');
+      } else if (cleanedText.includes('[CHART:pie]')) {
+        chartType = 'pie';
+        cleanedText = cleanedText.replace('[CHART:pie]', '');
+      }
+
+      // Stream the live AI response
+      simulateBotResponse(cleanedText, chartType);
+
+    } catch (err) {
+      // 2. FALLBACK: Execute the local rules engine if backend is offline or API limit exceeded
+      console.log('AI Endpoint offline/limited. Falling back to local intelligence ledger...', err);
+      
+      setTimeout(() => {
+        setIsThinking(false);
+        const qLower = textToSend.toLowerCase();
+        
+        if (qLower.includes('summarize esg') || qLower.includes('performance')) {
+          simulateBotResponse(
+            "EcoSphere ESG performance summary for FY2026 shows positive trends:\n- Carbon Intensity decreased by 12.4% vs Q1.\n- CSR volunteering aggregates reached 465 total hours.\n- Compliance auditor logs scored 96.2%.\n\nSee distribution weightages below:",
+            'pie'
+          );
+        } else if (qLower.includes('department') || qLower.includes('emits') || qLower.includes('most carbon')) {
+          simulateBotResponse(
+            "Facilities department leads corporate emissions under grid electricity usage (Scope 2). Let's inspect department logs:",
+            'bar',
+            ['Department', 'Activity Type', 'Annual CO2 Equivalent'],
+            [
+              { 'Department': 'Facilities', 'Activity Type': 'Electricity usage', 'Annual CO2 Equivalent': '210 t' },
+              { 'Department': 'Logistics', 'Activity Type': 'Diesel distribution', 'Annual CO2 Equivalent': '140 t' },
+              { 'Department': 'Engineering', 'Activity Type': 'Systems build', 'Annual CO2 Equivalent': '85 t' },
+            ]
+          );
+        } else if (qLower.includes('compliance') || qLower.includes('risk')) {
+          simulateBotResponse(
+            "ESG compliance scan indicates a low overall risk profile. Check priority items below:\n- Logistics Scope 1 diesel audits are due in 8 days.\n- Scope 3 supply chain logs show vendor reporting gaps in Facilities.\n\nCompliance benchmarks compared below:",
+            'radar'
+          );
+        } else if (qLower.includes('trend') || qLower.includes('predict')) {
+          simulateBotResponse(
+            "Sustainability forecasting indicates a steady decline in Scope 2 footprints due to scheduled renewable energy transfers. Our 6-month carbon ledger trend line is projected as follows:",
+            'area'
+          );
+        } else if (qLower.includes('audit') || qLower.includes('overdue')) {
+          simulateBotResponse(
+            "There are currently 0 overdue audits. However, 2 compliance reviews are approaching their dates:\n1. Scope 3 Supply Chain Audit (Due in 8 days)\n2. CSR Volunteering Log Verification (Due in 12 days)",
+            null,
+            ['Audit Task', 'Scope Domain', 'Due Date', 'Status'],
+            [
+              { 'Audit Task': 'Scope 3 Supply Chain', 'Scope Domain': 'Environmental', 'Due Date': 'July 20, 2026', 'Status': 'PENDING' },
+              { 'Audit Task': 'CSR volunteer ledger verify', 'Scope Domain': 'Social', 'Due Date': 'July 24, 2026', 'Status': 'DRAFT' },
+            ]
+          );
+        } else {
+          simulateBotResponse(
+            `I've analyzed your inquiry regarding "${textToSend}". Based on our active ledger scopes, Facilities Scope 2 accounts for 54% of emissions. Shift logistics flights to high-speed rail to maintain net-zero target paths.`
+          );
+        }
+      }, 1000);
     }
   };
 
