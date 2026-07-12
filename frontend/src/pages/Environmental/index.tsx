@@ -26,6 +26,7 @@ interface CarbonTx {
 export const Environmental: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabState>('overview');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isLocalMode, setIsLocalMode] = useState(false);
 
   // New Transaction Form State
   const [formDept, setFormDept] = useState('Facilities');
@@ -173,38 +174,86 @@ export const Environmental: React.FC = () => {
   ];
 
   // Add Transaction Handler
-  const handleAddEntry = (e: React.FormEvent) => {
+  const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formValue || isNaN(Number(formValue))) return;
 
     const val = Number(formValue);
-    let unit = 'kWh';
-    let factor = 0.000409;
+    
+    // Map human activity names to model categories
+    const activityMap: Record<string, string> = {
+      'Grid Electricity': 'electricity',
+      'Diesel Transport Fuel': 'diesel',
+      'Business Flight Miles': 'flights',
+      'Natural Gas Burners': 'natural_gas',
+    };
+    const activityType = activityMap[formActivity] || 'electricity';
 
-    if (formActivity === 'Diesel Transport Fuel') {
-      unit = 'Liters';
-      factor = 0.00263;
-    } else if (formActivity === 'Business Flight Miles') {
-      unit = 'km';
-      factor = 0.00018;
-    } else if (formActivity === 'Natural Gas Burners') {
-      unit = 'm3';
-      factor = 0.00189;
+    let unit = 'kWh';
+    if (activityType === 'diesel') unit = 'Liters';
+    else if (activityType === 'flights') unit = 'km';
+    else if (activityType === 'natural_gas') unit = 'm3';
+
+    try {
+      // Call the resilient backend carbon engine endpoint
+      const response = await fetch('http://localhost:5000/api/carbon/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activityType,
+          value: val,
+          unit,
+          region: 'US',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('API unreachable');
+      }
+
+      const data = await response.json();
+      setIsLocalMode(data.provider === 'Local EcoSphere');
+
+      const newTx: CarbonTx = {
+        id: `tx-${Date.now()}`,
+        dept: formDept,
+        activity: `${formActivity} Usage (${data.provider})`,
+        value: val,
+        unit,
+        co2: data.co2eValue,
+        date: formDate,
+        status: 'VERIFIED',
+      };
+
+      setTransactions([newTx, ...transactions]);
+    } catch (err) {
+      console.warn('API connection failed, activating Local Mode fallback...', err);
+      setIsLocalMode(true);
+
+      // Local fallback coefficients mapping
+      const localFactors: Record<string, number> = {
+        electricity: 0.000409,
+        diesel: 0.00263,
+        flights: 0.00018,
+        natural_gas: 0.00189,
+      };
+      const factor = localFactors[activityType] || 0.000409;
+      const co2Val = parseFloat((val * factor).toFixed(4));
+
+      const fallbackTx: CarbonTx = {
+        id: `tx-${Date.now()}`,
+        dept: formDept,
+        activity: `${formActivity} Usage (Local Fallback)`,
+        value: val,
+        unit,
+        co2: co2Val,
+        date: formDate,
+        status: 'DRAFT',
+      };
+
+      setTransactions([fallbackTx, ...transactions]);
     }
 
-    const co2Val = parseFloat((val * factor).toFixed(2));
-    const newTx: CarbonTx = {
-      id: `tx-${Date.now()}`,
-      dept: formDept,
-      activity: `${formActivity} Usage`,
-      value: val,
-      unit,
-      co2: co2Val,
-      date: formDate,
-      status: 'DRAFT',
-    };
-
-    setTransactions([newTx, ...transactions]);
     setIsAddModalOpen(false);
     setFormValue('');
   };
@@ -263,6 +312,13 @@ export const Environmental: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {isLocalMode && (
+        <div className="flex items-center space-x-2.5 p-3.5 bg-amber-500/15 border border-amber-500/20 text-amber-850 dark:text-amber-400 rounded-2xl text-xs font-bold animate-in fade-in duration-200">
+          <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+          <span>Operating in Local Carbon Intelligence Mode.</span>
+        </div>
+      )}
 
       {/* Stateful Tab Views rendering */}
       <div className="space-y-8">

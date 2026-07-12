@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { calculateCarbon } from './services/carbonEngine';
 
 // Load environment variables
 dotenv.config();
@@ -40,8 +41,24 @@ app.use('/api/departments', (req: Request, res: Response) => {
   res.status(501).json({ message: 'Departments endpoint not implemented' });
 });
 
-app.use('/api/carbon', (req: Request, res: Response) => {
-  res.status(501).json({ message: 'Carbon transactions endpoint not implemented' });
+app.post('/api/carbon/calculate', async (req: Request, res: Response) => {
+  const { activityType, value, unit, region } = req.body;
+  if (!activityType || value === undefined || !unit) {
+    return res.status(400).json({ error: 'activityType, value, and unit are required' });
+  }
+
+  try {
+    const result = await calculateCarbon({
+      activityType,
+      value: Number(value),
+      unit,
+      region,
+    });
+    res.json(result);
+  } catch (error: any) {
+    console.error('Carbon Calculation Error:', error);
+    res.status(500).json({ error: 'Failed to run carbon intelligence calculation', message: error.message });
+  }
 });
 
 app.use('/api/challenges', (req: Request, res: Response) => {
