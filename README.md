@@ -6,6 +6,10 @@ This repository is initialized with a robust, strict-TypeScript monorepo foundat
 
 ---
 
+
+## videp link 
+https://youtu.be/bbhAksEcu3Y
+
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
