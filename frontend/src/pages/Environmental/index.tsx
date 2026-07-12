@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -35,29 +35,59 @@ export const Environmental: React.FC = () => {
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Carbon Ledger Transactions State
-  const [transactions, setTransactions] = useState<CarbonTx[]>([
-    { id: 'tx-1', dept: 'Facilities', activity: 'Grid Electricity Usage', value: 4500, unit: 'kWh', co2: 1.84, date: '2026-07-10', status: 'VERIFIED' },
-    { id: 'tx-2', dept: 'Logistics', activity: 'Diesel Transport Fuel', value: 350, unit: 'Liters', co2: 0.92, date: '2026-07-09', status: 'VERIFIED' },
-    { id: 'tx-3', dept: 'Executive Office', activity: 'Business Flight Miles', value: 12000, unit: 'km', co2: 2.16, date: '2026-07-08', status: 'VERIFIED' },
-    { id: 'tx-4', dept: 'Engineering', activity: 'Natural Gas Burners', value: 1200, unit: 'm3', co2: 2.26, date: '2026-07-05', status: 'DRAFT' },
-    { id: 'tx-5', dept: 'Human Resources', activity: 'Office Electric heating', value: 800, unit: 'kWh', co2: 0.32, date: '2026-07-01', status: 'VERIFIED' },
-  ]);
+  const [transactions, setTransactions] = useState<CarbonTx[]>([]);
 
-  // Emission Factors Database (Static)
-  const emissionFactors = [
-    { id: 'ef-1', source: 'Grid Electricity', scope: 'Scope 2', factor: 0.000409, unit: 'tCO2e/kWh', region: 'North America', status: 'ACTIVE' },
-    { id: 'ef-2', source: 'Diesel Transport Fuel', scope: 'Scope 1', factor: 0.00263, unit: 'tCO2e/Liter', region: 'Europe', status: 'ACTIVE' },
-    { id: 'ef-3', source: 'Business Flight Miles', scope: 'Scope 3', factor: 0.00018, unit: 'tCO2e/km', region: 'Global', status: 'ACTIVE' },
-    { id: 'ef-4', source: 'Natural Gas Burners', scope: 'Scope 1', factor: 0.00189, unit: 'tCO2e/m3', region: 'North America', status: 'ACTIVE' },
-    { id: 'ef-5', source: 'Biodiesel Logistics', scope: 'Scope 1', factor: 0.00083, unit: 'tCO2e/Liter', region: 'Europe', status: 'DRAFT' },
-  ];
+  // Emission Factors Database
+  const [emissionFactors, setEmissionFactors] = useState<any[]>([]);
 
   // Sustainability Goals Database
-  const sustainabilityGoals = [
-    { id: 'g-1', title: '100% Renewable Energy', progress: 78, target: 'Dec 2027', current: '78%', goalVal: '100%', remaining: '22%', category: 'Energy' },
-    { id: 'g-2', title: 'Zero Waste to Landfill', progress: 92, target: 'Jun 2026', current: '92%', goalVal: '100%', remaining: '8%', category: 'Waste' },
-    { id: 'g-3', title: 'Reduce Flight Scope 3 Miles', progress: 45, target: 'Dec 2028', current: '45% reduction', goalVal: '50% reduction', remaining: '5%', category: 'Travel' },
-  ];
+  const [sustainabilityGoals, setSustainabilityGoals] = useState<any[]>([]);
+
+  const [dashboardData, setDashboardData] = useState<any>(null);
+
+  const fetchDashboardData = async () => {
+    try {
+      const { default: api } = await import('@/api/axiosInstance');
+      const [txRes, factorsRes, goalsRes, dashRes] = await Promise.all([
+        api.get('/v1/environment/carbon'),
+        api.get('/v1/environment/factors'),
+        api.get('/v1/environment/goals'),
+        api.get('/v1/environment/dashboard'),
+      ]);
+
+      const mappedTxs = txRes.data.data.map((t: any) => ({
+        id: t.id,
+        dept: t.department_id,
+        activity: t.activity_name,
+        value: t.quantity,
+        unit: 'units',
+        co2: t.emission_value,
+        date: t.date.split('T')[0],
+        status: 'VERIFIED'
+      }));
+      setTransactions(mappedTxs);
+      setEmissionFactors(factorsRes.data.data);
+      
+      const mappedGoals = goalsRes.data.data.map((g: any) => ({
+        id: g.id,
+        title: g.title,
+        progress: g.target_value > 0 ? Math.min(100, Math.round((g.current_value / g.target_value) * 100)) : 0,
+        target: g.deadline.split('T')[0],
+        current: `${g.current_value}`,
+        goalVal: `${g.target_value}`,
+        remaining: `${g.target_value - g.current_value}`,
+        category: 'Sustainability'
+      }));
+      setSustainabilityGoals(mappedGoals);
+      setDashboardData(dashRes.data.data);
+    } catch(err) {
+      console.error('Failed to load dashboard data', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
   // Reports directory
   const environmentalReports = [
@@ -66,27 +96,17 @@ export const Environmental: React.FC = () => {
     { id: 'rep-3', name: 'Facilities Greenhouse Gas Disclosures.pdf', type: 'PDF', size: '1.8 MB', date: '2026-07-08' },
   ];
 
-  // Overview metrics calculations
-  const totalEmissions = useMemo(() => {
-    return parseFloat(transactions.reduce((acc, curr) => acc + curr.co2, 0).toFixed(2));
-  }, [transactions]);
+  const totalEmissions = dashboardData ? dashboardData.total_emission : 0;
+  const envScore = dashboardData ? dashboardData.environment_score : 0;
+  const goalProgress = dashboardData ? dashboardData.goal_progress : 0;
 
   const departmentRanking = [
-    { name: 'Facilities', emissions: '210.4 t', status: 'High' },
-    { name: 'Logistics', emissions: '140.0 t', status: 'Medium' },
-    { name: 'Engineering', emissions: '85.2 t', status: 'Medium' },
-    { name: 'HR Office', emissions: '20.3 t', status: 'Low' },
+    { name: dashboardData ? dashboardData.top_department : 'Loading...', emissions: `${dashboardData ? dashboardData.total_emission : 0} t`, status: 'High' }
   ];
 
-  // Recharts Visual Dummy Data
-  const monthlyEmissionsTrend = [
-    { name: 'Jan', Scope1: 45, Scope2: 32, Scope3: 110 },
-    { name: 'Feb', Scope1: 52, Scope2: 29, Scope3: 95 },
-    { name: 'Mar', Scope1: 49, Scope2: 36, Scope3: 115 },
-    { name: 'Apr', Scope1: 38, Scope2: 25, Scope3: 88 },
-    { name: 'May', Scope1: 41, Scope2: 22, Scope3: 92 },
-    { name: 'Jun', Scope1: 33, Scope2: 19, Scope3: 74 },
-  ];
+  const monthlyEmissionsTrend = dashboardData 
+    ? dashboardData.monthly_emission.map((m: any) => ({ name: m.month, Scope1: m.emission, Scope2: 0, Scope3: 0 }))
+    : [];
 
   const departmentComparison = [
     { name: 'Facilities', value: 210 },
@@ -195,37 +215,45 @@ export const Environmental: React.FC = () => {
     else if (activityType === 'natural_gas') unit = 'm3';
 
     try {
-      // Call the resilient backend carbon engine endpoint
-      const response = await fetch('/api/v1/environment/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          activityType,
-          value: val,
-          unit,
-          region: 'US',
-        }),
-      });
+      const { default: api } = await import('@/api/axiosInstance');
 
-      if (!response.ok) {
-        throw new Error('API unreachable');
-      }
-
-      const data = await response.json();
-      setIsLocalMode(data.provider === 'Local EcoSphere');
-
-      const newTx: CarbonTx = {
-        id: `tx-${Date.now()}`,
-        dept: formDept,
-        activity: `${formActivity} Usage (${data.provider})`,
+      // 1. Calculate
+      const calcRes = await api.post('/v1/environment/calculate', {
+        activityType,
         value: val,
         unit,
-        co2: data.co2eValue,
-        date: formDate,
-        status: 'VERIFIED',
+        region: 'US',
+      });
+
+      const data = calcRes.data;
+      setIsLocalMode(data.provider === 'Local EcoSphere');
+
+      // Map dept to ID
+      const deptMap: Record<string, string> = {
+        'Facilities': 'dep-1',
+        'Logistics': 'dep-2',
+        'Engineering': 'dep-3',
+        'HR Office': 'dep-3',
+        'Executive Office': 'dep-1'
+      };
+      
+      const factorMap: Record<string, string> = {
+        'electricity': 'fac-1',
+        'diesel': 'fac-2',
+        'natural_gas': 'fac-3',
+        'flights': 'fac-4'
       };
 
-      setTransactions([newTx, ...transactions]);
+      // 2. Save
+      await api.post('/v1/environment/carbon', {
+        department_id: deptMap[formDept] || 'dep-1',
+        emission_factor_id: factorMap[activityType] || 'fac-1',
+        activity_name: `${formActivity} Usage`,
+        quantity: val
+      });
+
+      // 3. Refresh Data
+      fetchDashboardData();
     } catch (err) {
       console.warn('API connection failed, activating Local Mode fallback...', err);
       setIsLocalMode(true);
@@ -329,7 +357,7 @@ export const Environmental: React.FC = () => {
               <Card className="p-5 border border-border/50 shadow-sm flex flex-col justify-between">
                 <div>
                   <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest block">Environmental Score</span>
-                  <h3 className="text-3xl font-extrabold text-foreground/90 mt-1">94/100</h3>
+                  <h3 className="text-3xl font-extrabold text-foreground/90 mt-1">{envScore}/100</h3>
                 </div>
                 <Badge variant="success" className="w-fit scale-90 mt-4">AAA Target</Badge>
               </Card>
@@ -352,8 +380,8 @@ export const Environmental: React.FC = () => {
 
               <Card className="p-5 border border-border/50 shadow-sm flex flex-col justify-between">
                 <div>
-                  <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest block">Goals Completed</span>
-                  <h3 className="text-3xl font-extrabold text-foreground/90 mt-1">2/3 Goals</h3>
+                  <span className="text-[9px] font-bold text-muted-foreground/60 uppercase tracking-widest block">Goal Progress</span>
+                  <h3 className="text-3xl font-extrabold text-foreground/90 mt-1">{goalProgress}%</h3>
                 </div>
                 <span className="text-[10px] text-muted-foreground font-semibold mt-4">Active Milestones</span>
               </Card>

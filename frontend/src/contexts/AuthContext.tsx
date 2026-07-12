@@ -30,23 +30,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, _password: string): Promise<boolean> => {
     setIsLoading(true);
-    // Mock login verification
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    
-    const mockUser: User = {
-      id: 'd9b736b4-f3a2-4a0b-8025-fb3556de651a',
-      email: email,
-      firstName: 'Jane',
-      lastName: 'Doe',
-      role: email.includes('admin') ? 'ADMIN' : email.includes('auditor') ? 'AUDITOR' : 'EMPLOYEE',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    try {
+      const { default: api } = await import('@/api/axiosInstance');
+      
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', _password);
 
-    setUser(mockUser);
-    localStorage.setItem('esg_session_user', JSON.stringify(mockUser));
-    setIsLoading(false);
-    return true;
+      const res = await api.post('/v1/auth/login', formData, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+      
+      const token = res.data.data.access_token;
+      localStorage.setItem('esg_session_token', token);
+      
+      const userRes = await api.get('/v1/auth/me');
+      const mockUser: User = {
+        id: userRes.data.data.id,
+        email: userRes.data.data.email,
+        firstName: userRes.data.data.name.split(' ')[0] || 'User',
+        lastName: userRes.data.data.name.split(' ')[1] || '',
+        role: userRes.data.data.role.toUpperCase() as any,
+        createdAt: new Date(userRes.data.data.created_at),
+        updatedAt: new Date(userRes.data.data.created_at),
+      };
+
+      setUser(mockUser);
+      localStorage.setItem('esg_session_user', JSON.stringify(mockUser));
+      setIsLoading(false);
+      return true;
+    } catch (e) {
+      console.error('Login failed', e);
+      setIsLoading(false);
+      return false;
+    }
   };
 
   const logout = () => {
