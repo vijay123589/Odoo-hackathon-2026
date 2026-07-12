@@ -1,282 +1,280 @@
-from typing import Dict, Any
-from datetime import datetime, timezone
-import sqlite3
-import json
-from pathlib import Path
+import logging
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-DB_PATH = Path(__file__).resolve().parent.parent / "ecosphere.db"
+from app.config import settings
 
-def init_sqlite():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS carbon_transactions (
-            id TEXT PRIMARY KEY,
-            data TEXT
+logger = logging.getLogger("EcoSphereAPI")
+
+import uuid
+
+NAMESPACE_ECOSPHERE = uuid.uuid5(uuid.NAMESPACE_DNS, "ecosphere.com")
+
+def string_to_uuid(val: str) -> uuid.UUID:
+    """Convert a string ID to a stable UUID, or return a parsed UUID if valid."""
+    if not val:
+        return None
+    try:
+        return uuid.UUID(str(val))
+    except ValueError:
+        return uuid.uuid5(NAMESPACE_ECOSPHERE, str(val))
+
+DATABASE_URL = settings.DATABASE_URL
+IS_SQLITE = False
+
+
+# Resilient connection check and fallback to SQLite for local development/test execution
+if not DATABASE_URL or "postgresql" not in DATABASE_URL:
+    DATABASE_URL = "sqlite:///./ecosphere.db"
+    IS_SQLITE = True
+else:
+    # Double check if PostgreSQL is reachable, otherwise fallback to SQLite so tests continue to pass
+    try:
+        temp_engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 3})
+        with temp_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        temp_engine.dispose()
+    except Exception as exc:
+        logger.warning(
+            f"Failed to connect to PostgreSQL at {DATABASE_URL} ({str(exc)}). "
+            f"Falling back to SQLite database for testing and local development."
         )
-    ''')
-    conn.commit()
-    
-    cursor.execute('SELECT id, data FROM carbon_transactions')
-    rows = cursor.fetchall()
-    for row in rows:
-        tx_id, tx_data_str = row
-        tx_data = json.loads(tx_data_str)
-        if isinstance(tx_data.get('date'), str):
-            tx_data['date'] = datetime.fromisoformat(tx_data['date'].replace('Z', '+00:00'))
-        CARBON_TRANSACTIONS_DB[tx_id] = tx_data
-        
-    conn.close()
+        DATABASE_URL = "sqlite:///./ecosphere.db"
+        IS_SQLITE = True
 
-def save_transaction_to_sqlite(tx_data):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    tx_data_copy = dict(tx_data)
-    if isinstance(tx_data_copy.get('date'), datetime):
-        tx_data_copy['date'] = tx_data_copy['date'].isoformat()
-    cursor.execute('''
-        INSERT OR REPLACE INTO carbon_transactions (id, data)
-        VALUES (?, ?)
-    ''', (tx_data['id'], json.dumps(tx_data_copy)))
-    conn.commit()
-    conn.close()
+# Create SQLAlchemy engine
+if IS_SQLITE:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True
+    )
 
-def delete_transaction_from_sqlite(tx_id):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM carbon_transactions WHERE id = ?', (tx_id,))
-    conn.commit()
-    conn.close()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-# Thread-safe mockup dictionaries for global storage
-USERS_DB: Dict[str, Dict[str, Any]] = {}
-DEPARTMENTS_DB: Dict[str, Dict[str, Any]] = {}
-EMISSION_FACTORS_DB: Dict[str, Dict[str, Any]] = {}
-CARBON_TRANSACTIONS_DB: Dict[str, Dict[str, Any]] = {}
-ENVIRONMENTAL_GOALS_DB: Dict[str, Dict[str, Any]] = {}
+def get_db():
+    """FastAPI database session dependency yielding Local Session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 def seed_database():
-    """Seed the in-memory database with initial departments, users, and environmental data."""
+    """Seed default roles, departments, and users if they do not exist."""
+    from app.models.role import Role
+    from app.models.department import DepartmentORM
+    from app.models.user import UserORM
     from app.security import get_password_hash
-    
-    # Check if already seeded to avoid duplicates
-    if USERS_DB or DEPARTMENTS_DB or EMISSION_FACTORS_DB or ENVIRONMENTAL_GOALS_DB:
-        return
+    import uuid
+    from datetime import datetime, timezone
+
+    db = SessionLocal()
+    try:
+        # Create schema tables dynamically if SQLite fallback is active
+        if IS_SQLITE:
+            Base.metadata.create_all(bind=engine)
+
+        NAMESPACE_ECOSPHERE = uuid.uuid5(uuid.NAMESPACE_DNS, "ecosphere.com")
+        def to_uuid(name: str) -> uuid.UUID:
+            try:
+                return uuid.UUID(name)
+            except ValueError:
+                return uuid.uuid5(NAMESPACE_ECOSPHERE, name)
+
+        # Seed Roles
+        roles_to_seed = ["Admin", "Manager", "Employee"]
+        seeded_roles = {}
+        for r_name in roles_to_seed:
+            role = db.query(Role).filter(Role.name == r_name).first()
+            if not role:
+                role = Role(id=to_uuid(f"role-{r_name.lower()}"), name=r_name)
+                db.add(role)
+                db.flush()
+            seeded_roles[r_name] = role
+
+        # Seed Departments
+        deps_to_seed = [
+            {"id": "dep-1", "name": "Sustainability & ESG", "code": "SUS", "head": "Jane Doe"},
+            {"id": "dep-2", "name": "Operations & Logistics", "code": "OPS", "head": "John Smith"},
+            {"id": "dep-3", "name": "Human Resources", "code": "HR", "head": "Alice Johnson"},
+            {"id": "dep-it", "name": "Information Technology", "code": "IT", "head": "Head of IT"},
+            {"id": "dep-fin", "name": "Finance & Accounting", "code": "FIN", "head": "Head of Finance"},
+            {"id": "dep-mkt", "name": "Marketing & Communications", "code": "MKT", "head": "Head of Marketing"},
+        ]
+        seeded_deps = {}
+        for d_info in deps_to_seed:
+            dep = db.query(DepartmentORM).filter(DepartmentORM.code == d_info["code"]).first()
+            if not dep:
+                dep = DepartmentORM(
+                    id=to_uuid(d_info["id"]),
+                    name=d_info["name"],
+                    code=d_info["code"],
+                    head=d_info["head"],
+                    status="Active"
+                )
+                db.add(dep)
+                db.flush()
+            seeded_deps[d_info["code"]] = dep
+
+        # Seed Users
+        users_to_seed = [
+            {
+                "id": "usr-1",
+                "name": "Global ESG Administrator",
+                "email": "admin@ecosphere.com",
+                "password_hash": get_password_hash("AdminPass123"),
+                "role": "Admin",
+                "department_code": "SUS",
+                "status": "Active"
+            },
+            {
+                "id": "usr-2",
+                "name": "Sustainability Manager",
+                "email": "manager@ecosphere.com",
+                "password_hash": get_password_hash("ManagerPass123"),
+                "role": "Manager",
+                "department_code": "SUS",
+                "status": "Active"
+            },
+            {
+                "id": "usr-3",
+                "name": "ESG Associate Employee",
+                "email": "employee@ecosphere.com",
+                "password_hash": get_password_hash("EmployeePass123"),
+                "role": "Employee",
+                "department_code": "OPS",
+                "status": "Active"
+            }
+        ]
+        for u_info in users_to_seed:
+            user = db.query(UserORM).filter(UserORM.email == u_info["email"]).first()
+            if not user:
+                role = seeded_roles[u_info["role"]]
+                dep = seeded_deps[u_info["department_code"]]
+                user = UserORM(
+                    id=to_uuid(u_info["id"]),
+                    name=u_info["name"],
+                    email=u_info["email"],
+                    password_hash=u_info["password_hash"],
+                    role_id=role.id,
+                    department_id=dep.id,
+                    status=u_info["status"]
+                )
+                db.add(user)
         
-    # Seed Departments
-    departments = [
-        {
-            "id": "dep-1",
-            "name": "Sustainability & ESG",
-            "code": "SUS",
-            "head": "Jane Doe",
-            "status": "Active"
-        },
-        {
-            "id": "dep-2",
-            "name": "Operations & Logistics",
-            "code": "OPS",
-            "head": "John Smith",
-            "status": "Active"
-        },
-        {
-            "id": "dep-3",
-            "name": "Human Resources",
-            "code": "HR",
-            "head": "Alice Johnson",
-            "status": "Active"
-        }
-    ]
-    for dep in departments:
-        DEPARTMENTS_DB[dep["id"]] = dep
+        # Seed Emission Factors
+        from app.models.environmental import EmissionFactor, CarbonTransaction, EnvironmentalGoal
+        factors_to_seed = [
+            {"id": "fac-1", "activity_name": "Grid Electricity Usage", "category": "electricity", "factor_value": 0.000409, "unit": "kWh", "description": "Grid electricity emissions"},
+            {"id": "fac-2", "activity_name": "Diesel Transport Fuel", "category": "diesel", "factor_value": 0.00263, "unit": "Liters", "description": "Transportation diesel emissions"},
+            {"id": "fac-3", "activity_name": "Natural Gas Burners", "category": "natural_gas", "factor_value": 0.00189, "unit": "m3", "description": "Building heating gas emissions"},
+            {"id": "fac-4", "activity_name": "Business Flight Miles", "category": "flights", "factor_value": 0.00018, "unit": "km", "description": "Business flights travel emissions"},
+        ]
+        seeded_factors = {}
+        for f_info in factors_to_seed:
+            factor = db.query(EmissionFactor).filter(EmissionFactor.activity_name == f_info["activity_name"]).first()
+            if not factor:
+                factor = EmissionFactor(
+                    id=to_uuid(f_info["id"]),
+                    activity_name=f_info["activity_name"],
+                    category=f_info["category"],
+                    factor_value=f_info["factor_value"],
+                    unit=f_info["unit"],
+                    description=f_info["description"]
+                )
+                db.add(factor)
+                db.flush()
+            seeded_factors[f_info["id"]] = factor
 
-    # Seed Users
-    users = [
-        {
-            "id": "usr-1",
-            "name": "Global ESG Administrator",
-            "email": "admin@ecosphere.com",
-            "password_hash": get_password_hash("password123"),
-            "role": "Admin",
-            "department": "dep-1",
-            "status": "Active",
-            "created_at": datetime.now(timezone.utc)
-        },
-        {
-            "id": "usr-2",
-            "name": "Sustainability Manager",
-            "email": "manager@ecosphere.com",
-            "password_hash": get_password_hash("ManagerPass123"),
-            "role": "Manager",
-            "department": "dep-1",
-            "status": "Active",
-            "created_at": datetime.now(timezone.utc)
-        },
-        {
-            "id": "usr-3",
-            "name": "ESG Associate Employee",
-            "email": "employee@ecosphere.com",
-            "password_hash": get_password_hash("EmployeePass123"),
-            "role": "Employee",
-            "department": "dep-2",
-            "status": "Active",
-            "created_at": datetime.now(timezone.utc)
-        }
-    ]
-    for user in users:
-        USERS_DB[user["id"]] = user
+        # Seed Environmental Goals
+        from datetime import timedelta
+        goals_to_seed = [
+            {"id": "goal-1", "title": "Reduce Logistics Emissions", "description": "Reduce fleet diesel transport consumption", "target_value": 1000.0, "current_value": 0.0, "unit": "Liters", "deadline": datetime.now(timezone.utc) + timedelta(days=30), "status": "In Progress"},
+            {"id": "goal-2", "title": "Switch HQ to Green Energy", "description": "Transition office grid energy to solar/wind", "target_value": 500.0, "current_value": 0.0, "unit": "kWh", "deadline": datetime.now(timezone.utc) + timedelta(days=15), "status": "In Progress"},
+            {"id": "goal-3", "title": "Offset HQ Travel", "description": "Compensate corporate business flight emissions", "target_value": 2000.0, "current_value": 2000.0, "unit": "km", "deadline": datetime.now(timezone.utc) - timedelta(days=5), "status": "Completed"},
+            {"id": "goal-4", "title": "Overdue Recycling Target", "description": "Achieve high paper and plastic recycling target", "target_value": 300.0, "current_value": 0.0, "unit": "kg", "deadline": datetime.now(timezone.utc) - timedelta(days=2), "status": "In Progress"},
+        ]
+        for g_info in goals_to_seed:
+            goal = db.query(EnvironmentalGoal).filter(EnvironmentalGoal.title == g_info["title"]).first()
+            if not goal:
+                goal = EnvironmentalGoal(
+                    id=to_uuid(g_info["id"]),
+                    title=g_info["title"],
+                    description=g_info["description"],
+                    target_value=g_info["target_value"],
+                    current_value=g_info["current_value"],
+                    unit=g_info["unit"],
+                    deadline=g_info["deadline"],
+                    status=g_info["status"]
+                )
+                db.add(goal)
 
-    # Seed Emission Factors
-    factors = [
-        {
-            "id": "fac-1",
-            "category": "Electricity",
-            "factor": 0.85,
-            "unit": "kWh",
-            "description": "Grid electricity Scope 2 emissions"
-        },
-        {
-            "id": "fac-2",
-            "category": "Diesel",
-            "factor": 2.68,
-            "unit": "Liters",
-            "description": "Transportation diesel Scope 1 emissions"
-        },
-        {
-            "id": "fac-3",
-            "category": "Natural Gas",
-            "factor": 1.90,
-            "unit": "m3",
-            "description": "Building heating gas emissions"
-        },
-        {
-            "id": "fac-4",
-            "category": "Flight",
-            "factor": 0.18,
-            "unit": "km",
-            "description": "Business flight Scope 3 travel emissions"
-        }
-    ]
-    for fac in factors:
-        EMISSION_FACTORS_DB[fac["id"]] = fac
+        # Seed Carbon Transactions
+        tx_to_seed = [
+            {
+                "id": "tx-1",
+                "user_email": "employee@ecosphere.com",
+                "department_code": "OPS",
+                "factor_id": "fac-2", # Diesel
+                "activity_name": "Diesel Transport Run",
+                "quantity": 350.0,
+                "remarks": "Weekly logistic transport dispatch",
+                "date": datetime.now(timezone.utc) - timedelta(days=1)
+            },
+            {
+                "id": "tx-2",
+                "user_email": "manager@ecosphere.com",
+                "department_code": "SUS",
+                "factor_id": "fac-1", # Electricity
+                "activity_name": "HQ Office Electricity",
+                "quantity": 4500.0,
+                "remarks": "Monthly facilities power grid usage",
+                "date": datetime.now(timezone.utc) - timedelta(days=3)
+            },
+            {
+                "id": "tx-3",
+                "user_email": "admin@ecosphere.com",
+                "department_code": "SUS",
+                "factor_id": "fac-4", # Flight
+                "activity_name": "Recruitment team business flights",
+                "quantity": 12000.0,
+                "remarks": "Aviation mileage",
+                "date": datetime.now(timezone.utc) - timedelta(days=5)
+            }
+        ]
+        for t_info in tx_to_seed:
+            user_orm = db.query(UserORM).filter(UserORM.email == t_info["user_email"]).first()
+            dep_orm = db.query(DepartmentORM).filter(DepartmentORM.code == t_info["department_code"]).first()
+            if user_orm and dep_orm:
+                tx = db.query(CarbonTransaction).filter(CarbonTransaction.activity_name == t_info["activity_name"]).first()
+                if not tx:
+                    factor_orm = seeded_factors[t_info["factor_id"]]
+                    carbon_emission = t_info["quantity"] * factor_orm.factor_value
+                    tx = CarbonTransaction(
+                        id=to_uuid(t_info["id"]),
+                        user_id=user_orm.id,
+                        department_id=dep_orm.id,
+                        emission_factor_id=factor_orm.id,
+                        activity_name=t_info["activity_name"],
+                        quantity=t_info["quantity"],
+                        carbon_emission=carbon_emission,
+                        remarks=t_info["remarks"],
+                        transaction_date=t_info["date"]
+                    )
+                    db.add(tx)
 
-    # Seed Environmental Goals
-    from datetime import timedelta
-    goals = [
-        {
-            "id": "goal-1",
-            "title": "Reduce Logistics Emissions",
-            "target_value": 1000.0,
-            "current_value": 0.0,
-            "deadline": datetime.now(timezone.utc) + timedelta(days=30),
-            "status": "Active"
-        },
-        {
-            "id": "goal-2",
-            "title": "Switch HQ to Green Energy",
-            "target_value": 500.0,
-            "current_value": 0.0,
-            "deadline": datetime.now(timezone.utc) + timedelta(days=15),
-            "status": "Active"
-        },
-        {
-            "id": "goal-3",
-            "title": "Offset HQ Travel",
-            "target_value": 2000.0,
-            "current_value": 2000.0,
-            "deadline": datetime.now(timezone.utc) - timedelta(days=5),
-            "status": "Achieved"
-        },
-        {
-            "id": "goal-4",
-            "title": "Overdue Recycling Target",
-            "target_value": 300.0,
-            "current_value": 0.0,
-            "deadline": datetime.now(timezone.utc) - timedelta(days=2),
-            "status": "Active"
-        }
-    ]
-    for goal in goals:
-        ENVIRONMENTAL_GOALS_DB[goal["id"]] = goal
-
-    init_sqlite()
-
-    # Seed Carbon Transactions (Synthetic Data)
-    if not CARBON_TRANSACTIONS_DB:
-        transactions = [
-        {
-            "id": "tx-1",
-            "department_id": "dep-2", # Operations & Logistics
-            "emission_factor_id": "fac-2", # Diesel
-            "activity_name": "Diesel Transport Run",
-            "quantity": 350.0,
-            "emission_value": 938.0, # 350.0 * 2.68
-            "created_by": "employee@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=1)
-        },
-        {
-            "id": "tx-2",
-            "department_id": "dep-1", # Sustainability & ESG
-            "emission_factor_id": "fac-1", # Electricity
-            "activity_name": "HQ Office Electricity",
-            "quantity": 4500.0,
-            "emission_value": 3825.0, # 4500.0 * 0.85
-            "created_by": "manager@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=3)
-        },
-        {
-            "id": "tx-3",
-            "department_id": "dep-3", # Human Resources
-            "emission_factor_id": "fac-4", # Flight
-            "activity_name": "Recruitment team business flights",
-            "quantity": 12000.0,
-            "emission_value": 2160.0, # 12000.0 * 0.18
-            "created_by": "admin@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=5)
-        },
-        {
-            "id": "tx-hist-1",
-            "department_id": "dep-2",
-            "emission_factor_id": "fac-2",
-            "activity_name": "June transport runs",
-            "quantity": 300.0,
-            "emission_value": 804.0,
-            "created_by": "employee@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=30)
-        },
-        {
-            "id": "tx-hist-2",
-            "department_id": "dep-1",
-            "emission_factor_id": "fac-1",
-            "activity_name": "June office electricity",
-            "quantity": 4000.0,
-            "emission_value": 3400.0,
-            "created_by": "manager@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=35)
-        },
-        {
-            "id": "tx-hist-3",
-            "department_id": "dep-2",
-            "emission_factor_id": "fac-2",
-            "activity_name": "May transport runs",
-            "quantity": 250.0,
-            "emission_value": 670.0,
-            "created_by": "employee@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=60)
-        },
-        {
-            "id": "tx-hist-4",
-            "department_id": "dep-1",
-            "emission_factor_id": "fac-1",
-            "activity_name": "May office electricity",
-            "quantity": 3800.0,
-            "emission_value": 3230.0,
-            "created_by": "manager@ecosphere.com",
-            "date": datetime.now(timezone.utc) - timedelta(days=65)
-        }
-    ]
-        for tx in transactions:
-            CARBON_TRANSACTIONS_DB[tx["id"]] = tx
-            save_transaction_to_sqlite(tx)
-
-
+        db.commit()
+        logger.info("Database seeding completed successfully.")
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"Seeding failed: {str(exc)}")
+    finally:
+        db.close()

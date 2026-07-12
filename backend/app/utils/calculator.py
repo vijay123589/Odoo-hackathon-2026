@@ -1,41 +1,38 @@
 from datetime import datetime, timezone
-from app.database import ENVIRONMENTAL_GOALS_DB
+from sqlalchemy.orm import Session
+from app.models.environmental import EnvironmentalGoal
 
-def calculate_environment_score() -> float:
+def calculate_environment_score(db: Session) -> float:
     """
-    Calculate the environmental performance score:
-    - Base score of 100
-    - Deduct 5 points for each overdue active goal (deadline passed and status is "Active")
-    - Deduct 3 points for every 100 kg CO2 that an active goal's current value exceeds its target value
-    - Add 5 points for each achieved goal ("Achieved"), capped at 100
-    - Minimum score is 0, maximum score is 100
+    Calculate environmental score from database goals:
+    - Base: 100
+    - Deduct 5 points for each overdue active goal (deadline passed and status is "In Progress")
+    - Deduct 3 points for every 100 units current exceeds target for active goals
+    - Add 5 points for each achieved goal ("Completed"), capped at 100
+    - Min 0, Max 100
     """
     score = 100.0
     now = datetime.now(timezone.utc)
 
-    for goal in ENVIRONMENTAL_GOALS_DB.values():
-        status = goal.get("status", "Active")
+    goals = db.query(EnvironmentalGoal).all()
+    for goal in goals:
+        status = goal.status
         
-        if status == "Active":
-            # 1. Overdue check
-            deadline = goal.get("deadline")
+        if status == "In Progress":
+            deadline = goal.deadline
             if deadline:
-                # Ensure timezone awareness matches
                 if deadline.tzinfo is None:
                     deadline = deadline.replace(tzinfo=timezone.utc)
                 if deadline < now:
                     score -= 5.0
 
-            # 2. Exceeded target check (-3 points per 100 kg CO2 above target)
-            current = goal.get("current_value", 0.0)
-            target = goal.get("target_value", 0.0)
+            current = goal.current_value or 0.0
+            target = goal.target_value or 0.0
             if current > target:
                 excess = current - target
                 score -= int(excess // 100) * 3
 
-        elif status == "Achieved":
-            # 3. Achieved goal bonus
+        elif status == "Completed":
             score += 5.0
 
-    # Bounded limits: min 0, max 100
     return max(0.0, min(100.0, score))
