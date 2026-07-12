@@ -16,6 +16,8 @@ from app.api.social import router as social_router
 from app.api.governance import router as governance_router
 from app.api.gamification import router as gamification_router
 from app.api.reports import router as reports_router
+from app.api.copilot import router as copilot_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,6 +59,8 @@ app.include_router(social_router, prefix=settings.API_V1_STR)
 app.include_router(governance_router, prefix=settings.API_V1_STR)
 app.include_router(gamification_router, prefix=settings.API_V1_STR)
 app.include_router(reports_router, prefix=settings.API_V1_STR)
+app.include_router(copilot_router, prefix=settings.API_V1_STR)
+
 
 
 # ------------ GLOBAL EXCEPTION HANDLERS ---------
