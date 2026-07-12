@@ -9,10 +9,14 @@ from alembic import context
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.database import Base, DATABASE_URL, IS_SQLITE
-# Import all database models to register them on Base.metadata for autogenerate
 from app.models.role import Role
 from app.models.department import DepartmentORM
 from app.models.user import UserORM
+from app.models.environmental import EmissionFactor, CarbonTransaction, EnvironmentalGoal
+from app.models.social import CSRActivity, EmployeeParticipation
+from app.models.governance import Policy, PolicyAcknowledgement, Audit, ComplianceIssue
+from app.models.gamification import Challenge, ChallengeParticipation, Badge, EmployeeBadge, Reward, RewardRedemption
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

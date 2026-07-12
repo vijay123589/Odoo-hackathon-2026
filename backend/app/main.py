@@ -11,6 +11,11 @@ from app.middleware.logging import LoggingMiddleware
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.departments import router as departments_router
+from app.api.environmental import router as environmental_router
+from app.api.social import router as social_router
+from app.api.governance import router as governance_router
+from app.api.gamification import router as gamification_router
+from app.api.reports import router as reports_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +52,12 @@ app.add_middleware(
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(departments_router, prefix=settings.API_V1_STR)
+app.include_router(environmental_router, prefix=settings.API_V1_STR)
+app.include_router(social_router, prefix=settings.API_V1_STR)
+app.include_router(governance_router, prefix=settings.API_V1_STR)
+app.include_router(gamification_router, prefix=settings.API_V1_STR)
+app.include_router(reports_router, prefix=settings.API_V1_STR)
+
 
 # ------------ GLOBAL EXCEPTION HANDLERS ---------
 
