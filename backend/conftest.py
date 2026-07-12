@@ -1,87 +1,33 @@
-import logging
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import declarative_base, sessionmaker
-
-from app.config import settings
-
-logger = logging.getLogger("EcoSphereAPI")
-
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
 import uuid
 
-NAMESPACE_ECOSPHERE = uuid.uuid5(uuid.NAMESPACE_DNS, "ecosphere.com")
+from app.main import app
+from app.database import engine, SessionLocal, get_db
+from app.models.role import Role
+from app.models.department import DepartmentORM
+from app.models.user import UserORM
+from app.security import get_password_hash
 
-def string_to_uuid(val: str) -> uuid.UUID:
-    """Convert a string ID to a stable UUID, or return a parsed UUID if valid."""
-    if not val:
-        return None
+def clean_database(db):
+    """Clean all transactional tables (users, departments) while preserving roles lookup table."""
+    dialect_name = db.bind.dialect.name
     try:
-        return uuid.UUID(str(val))
-    except ValueError:
-        return uuid.uuid5(NAMESPACE_ECOSPHERE, str(val))
+        if dialect_name == "postgresql":
+            db.execute(text("TRUNCATE TABLE users, departments RESTART IDENTITY CASCADE;"))
+        else:
+            db.execute(text("DELETE FROM users;"))
+            db.execute(text("DELETE FROM departments;"))
+        db.commit()
 
-DATABASE_URL = settings.DATABASE_URL
-IS_SQLITE = False
-
-
-# Resilient connection check and fallback to SQLite for local development/test execution
-if not DATABASE_URL or "postgresql" not in DATABASE_URL:
-    DATABASE_URL = "sqlite:///./ecosphere.db"
-    IS_SQLITE = True
-else:
-    # Double check if PostgreSQL is reachable, otherwise fallback to SQLite so tests continue to pass
-    try:
-        temp_engine = create_engine(DATABASE_URL, connect_args={"connect_timeout": 3})
-        with temp_engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        temp_engine.dispose()
     except Exception as exc:
-        logger.warning(
-            f"Failed to connect to PostgreSQL at {DATABASE_URL} ({str(exc)}). "
-            f"Falling back to SQLite database for testing and local development."
-        )
-        DATABASE_URL = "sqlite:///./ecosphere.db"
-        IS_SQLITE = True
+        db.rollback()
+        raise RuntimeError(f"Database cleanup failed: {str(exc)}") from exc
 
-# Create SQLAlchemy engine
-if IS_SQLITE:
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False}
-    )
-else:
-    engine = create_engine(
-        DATABASE_URL,
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True
-    )
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-def get_db():
-    """FastAPI database session dependency yielding Local Session."""
-    db = SessionLocal()
+def seed_test_data(db):
+    """Seed baseline roles, departments, and users dynamically within the transaction context."""
     try:
-        yield db
-    finally:
-        db.close()
-
-def seed_database():
-    """Seed default roles, departments, and users if they do not exist."""
-    from app.models.role import Role
-    from app.models.department import DepartmentORM
-    from app.models.user import UserORM
-    from app.security import get_password_hash
-    import uuid
-    from datetime import datetime, timezone
-
-    db = SessionLocal()
-    try:
-        # Create schema tables dynamically if SQLite fallback is active
-        if IS_SQLITE:
-            Base.metadata.create_all(bind=engine)
-
         NAMESPACE_ECOSPHERE = uuid.uuid5(uuid.NAMESPACE_DNS, "ecosphere.com")
         def to_uuid(name: str) -> uuid.UUID:
             try:
@@ -89,7 +35,7 @@ def seed_database():
             except ValueError:
                 return uuid.uuid5(NAMESPACE_ECOSPHERE, name)
 
-        # Seed Roles
+        # 1. Seed Roles
         roles_to_seed = ["Admin", "Manager", "Employee"]
         seeded_roles = {}
         for r_name in roles_to_seed:
@@ -100,7 +46,7 @@ def seed_database():
                 db.flush()
             seeded_roles[r_name] = role
 
-        # Seed Departments
+        # 2. Seed Departments
         deps_to_seed = [
             {"id": "dep-1", "name": "Sustainability & ESG", "code": "SUS", "head": "Jane Doe"},
             {"id": "dep-2", "name": "Operations & Logistics", "code": "OPS", "head": "John Smith"},
@@ -124,7 +70,7 @@ def seed_database():
                 db.flush()
             seeded_deps[d_info["code"]] = dep
 
-        # Seed Users
+        # 3. Seed Users
         users_to_seed = [
             {
                 "id": "usr-1",
@@ -171,9 +117,40 @@ def seed_database():
                 db.add(user)
         
         db.commit()
-        logger.info("Database seeding completed successfully.")
     except Exception as exc:
         db.rollback()
-        logger.error(f"Seeding failed: {str(exc)}")
-    finally:
-        db.close()
+        raise RuntimeError(f"Database seeding failed: {str(exc)}") from exc
+
+@pytest.fixture(scope="function")
+def db_session():
+    """Create a database transaction, clean tables, seed data, and roll back changes upon test teardown."""
+    connection = engine.connect()
+    transaction = connection.begin()
+    
+    # Create session bound to the active transaction
+    db = SessionLocal(bind=connection)
+    
+    clean_database(db)
+    seed_test_data(db)
+    
+    yield db
+    
+    db.close()
+    transaction.rollback()
+    connection.close()
+
+@pytest.fixture(scope="function", autouse=True)
+def override_db_dependency(db_session):
+    """Override the FastAPI database dependency with the active transactional session."""
+    def _get_db():
+        yield db_session
+        
+    app.dependency_overrides[get_db] = _get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
+@pytest.fixture(scope="function")
+def client():
+    """Provide a TestClient instance running within the app lifecycle context."""
+    with TestClient(app) as test_client:
+        yield test_client

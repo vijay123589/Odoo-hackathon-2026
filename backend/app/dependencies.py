@@ -11,6 +11,9 @@ from app.services.user import UserService
 from app.services.department import DepartmentService
 from app.services.auth import AuthService
 
+from sqlalchemy.orm import Session
+from app.database import get_db
+
 # Define where OAuth2 password tokens are generated
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login",
@@ -19,13 +22,14 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 # ----------------- REPOSITORY PROVIDERS -----------------
 
-def get_user_repository() -> UserRepository:
+def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
     """Provide UserRepository instance."""
-    return UserRepository()
+    return UserRepository(db)
 
-def get_department_repository() -> DepartmentRepository:
+def get_department_repository(db: Session = Depends(get_db)) -> DepartmentRepository:
     """Provide DepartmentRepository instance."""
-    return DepartmentRepository()
+    return DepartmentRepository(db)
+
 
 # ------------------ SERVICE PROVIDERS -------------------
 

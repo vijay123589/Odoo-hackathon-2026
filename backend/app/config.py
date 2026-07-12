@@ -19,5 +19,7 @@ class Settings:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:12345678@localhost:5432/ecosphere")
 
 settings = Settings()
+
