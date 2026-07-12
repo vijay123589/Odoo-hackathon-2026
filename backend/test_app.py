@@ -1,23 +1,14 @@
 import pytest
-from fastapi.testclient import TestClient
-from app.main import app
-from app.database import seed_database
-
-# Seed database for test scenarios
-seed_database()
-
-client = TestClient(app)
-
 
 # Helper function to get Authorization headers
-def get_auth_header(email: str, password: str) -> dict:
+def get_auth_header(client, email: str, password: str) -> dict:
     login_data = {"username": email, "password": password}
     response = client.post("/api/v1/auth/login", data=login_data)
     assert response.status_code == 200, f"Login failed for {email}: {response.json()}"
     token = response.json()["data"]["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
-def test_health_check():
+def test_health_check(client):
     """Verify that root healthcheck endpoint returns successfully with standardized envelope."""
     response = client.get("/")
     assert response.status_code == 200
@@ -26,7 +17,7 @@ def test_health_check():
     assert "EcoSphere" in res_json["message"]
     assert "docs_url" in res_json["data"]
 
-def test_auth_registration_and_login():
+def test_auth_registration_and_login(client):
     """Verify registration logic (validating requirements) and login token distribution."""
     # 1. Registration with short password should fail
     bad_reg = {
@@ -66,7 +57,7 @@ def test_auth_registration_and_login():
     assert response.json()["success"] is False
 
     # 5. Successful login
-    headers = get_auth_header("test_good@ecosphere.com", "ValidPassword123!")
+    headers = get_auth_header(client, "test_good@ecosphere.com", "ValidPassword123!")
     
     # 6. Retrieve profile of logged in user
     response = client.get("/api/v1/auth/me", headers=headers)
@@ -75,16 +66,16 @@ def test_auth_registration_and_login():
     assert res_json["success"] is True
     assert res_json["data"]["email"] == "test_good@ecosphere.com"
 
-def test_rbac_authorization():
+def test_rbac_authorization(client):
     """Verify that RBAC correctly permits and blocks resources based on user roles."""
     # Seed data details:
     # admin@ecosphere.com -> AdminPass123 (Admin)
     # manager@ecosphere.com -> ManagerPass123 (Manager)
     # employee@ecosphere.com -> EmployeePass123 (Employee)
     
-    admin_headers = get_auth_header("admin@ecosphere.com", "AdminPass123")
-    manager_headers = get_auth_header("manager@ecosphere.com", "ManagerPass123")
-    employee_headers = get_auth_header("employee@ecosphere.com", "EmployeePass123")
+    admin_headers = get_auth_header(client, "admin@ecosphere.com", "AdminPass123")
+    manager_headers = get_auth_header(client, "manager@ecosphere.com", "ManagerPass123")
+    employee_headers = get_auth_header(client, "employee@ecosphere.com", "EmployeePass123")
 
     # Scenario: Reading Users list
     # Admin - Yes
@@ -117,9 +108,9 @@ def test_rbac_authorization():
     res = client.post("/api/v1/departments", json=new_dep, headers=employee_headers)
     assert res.status_code == 403
 
-def test_user_crud():
+def test_user_crud(client):
     """Test full user management lifecycle (Admin-only)."""
-    admin_headers = get_auth_header("admin@ecosphere.com", "AdminPass123")
+    admin_headers = get_auth_header(client, "admin@ecosphere.com", "AdminPass123")
     
     # 1. Create a user
     user_payload = {
@@ -156,10 +147,10 @@ def test_user_crud():
     response = client.get(f"/api/v1/users/{user_id}", headers=admin_headers)
     assert response.status_code == 404
 
-def test_department_crud():
+def test_department_crud(client):
     """Test department creation, updates, listing, and cascade effects on deletion."""
-    admin_headers = get_auth_header("admin@ecosphere.com", "AdminPass123")
-    employee_headers = get_auth_header("employee@ecosphere.com", "EmployeePass123")
+    admin_headers = get_auth_header(client, "admin@ecosphere.com", "AdminPass123")
+    employee_headers = get_auth_header(client, "employee@ecosphere.com", "EmployeePass123")
 
     # 1. List departments (accessible to employees)
     res = client.get("/api/v1/departments", headers=employee_headers)
@@ -204,6 +195,3 @@ def test_department_crud():
 
     # Clean up inspector user
     client.delete(f"/api/v1/users/{user_id}", headers=admin_headers)
-
-if __name__ == "__main__":
-    pytest.main(["-v", __file__])
