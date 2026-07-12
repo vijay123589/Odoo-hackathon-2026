@@ -15,7 +15,7 @@ As **Member 2**, you are responsible for tracking, calculating, and reporting en
 ---
 
 ## 🛠️ Proposed File Structure
-To seamlessly integrate with Member 1's backend framework, all files are structured inside `backend/app/` using relative imports:
+To seamlessly integrate with Member 1 (Kumaran)'s backend framework, all files are structured inside `backend/app/` using relative imports:
 
 ```text
 backend/app/
