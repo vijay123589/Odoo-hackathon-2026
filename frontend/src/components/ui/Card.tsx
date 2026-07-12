@@ -2,12 +2,15 @@ import React from 'react';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   glass?: boolean;
+  interactive?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className = '', glass = false, ...props }) => {
+export const Card: React.FC<CardProps> = ({ children, className = '', glass = false, interactive = false, ...props }) => {
   return (
     <div
-      className={`rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-all duration-300 ${
+      className={`rounded-2xl border border-border/60 bg-card text-card-foreground shadow-premium transition-all duration-350 ease-out ${
+        interactive ? 'hover:shadow-[0_16px_44px_-10px_rgba(28,38,30,0.06)] dark:hover:shadow-[0_16px_44px_-10px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-border cursor-pointer' : ''
+      } ${
         glass ? 'glass' : ''
       } ${className}`}
       {...props}
@@ -23,7 +26,7 @@ export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => {
   return (
-    <div className={`flex flex-col space-y-1.5 p-6 ${className}`} {...props}>
+    <div className={`flex flex-col space-y-2 p-7 pb-4 ${className}`} {...props}>
       {children}
     </div>
   );
@@ -36,7 +39,7 @@ export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
 }) => {
   return (
     <h3
-      className={`text-lg font-semibold leading-none tracking-tight ${className}`}
+      className={`text-base font-semibold leading-none tracking-tight text-foreground/90 ${className}`}
       {...props}
     >
       {children}
@@ -50,7 +53,7 @@ export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement
   ...props
 }) => {
   return (
-    <p className={`text-sm text-muted-foreground ${className}`} {...props}>
+    <p className={`text-xs text-muted-foreground leading-relaxed ${className}`} {...props}>
       {children}
     </p>
   );
@@ -62,7 +65,7 @@ export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => {
   return (
-    <div className={`p-6 pt-0 ${className}`} {...props}>
+    <div className={`p-7 pt-2 ${className}`} {...props}>
       {children}
     </div>
   );
@@ -74,7 +77,7 @@ export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => {
   return (
-    <div className={`flex items-center p-6 pt-0 border-t border-border/20 ${className}`} {...props}>
+    <div className={`flex items-center p-7 pt-2 border-t border-border/10 ${className}`} {...props}>
       {children}
     </div>
   );

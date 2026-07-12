@@ -15,14 +15,14 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium transition-colors duration-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-250 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed select-none';
 
   const variants = {
-    primary: 'bg-primary hover:bg-primary-600 text-white focus:ring-primary-500',
-    secondary: 'bg-secondary hover:bg-secondary-600 text-white focus:ring-secondary-500',
-    outline: 'border border-border bg-transparent text-foreground hover:bg-muted focus:ring-ring',
-    destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus:ring-destructive',
-    ghost: 'bg-transparent hover:bg-muted text-foreground focus:ring-ring',
+    primary: 'bg-primary text-primary-foreground hover:bg-primary/92 active:scale-[0.98] focus:ring-primary/30 shadow-sm border border-transparent',
+    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/92 active:scale-[0.98] focus:ring-secondary/30 shadow-sm border border-transparent',
+    outline: 'border border-border/80 bg-transparent text-foreground/85 hover:text-foreground hover:bg-muted/80 active:scale-[0.98] focus:ring-primary/20',
+    destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/92 active:scale-[0.98] focus:ring-destructive/30 shadow-sm',
+    ghost: 'bg-transparent hover:bg-muted text-foreground/80 hover:text-foreground focus:ring-primary/20 active:scale-[0.98]',
   };
 
   const sizes = {

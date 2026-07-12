@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { motion } from 'framer-motion';
 import {
   LayoutDashboard,
   Leaf,
@@ -13,13 +14,20 @@ import {
   LogOut,
   Moon,
   Sun,
+  ChevronLeft,
 } from 'lucide-react';
 
 interface SidebarProps {
   className?: string;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  className = '',
+  isCollapsed,
+  onToggleCollapse,
+}) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
@@ -34,49 +42,83 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   ];
 
   return (
-    <aside className={`flex flex-col w-64 bg-card border-r border-border h-screen select-none ${className}`}>
+    <motion.aside
+      animate={{ width: isCollapsed ? 76 : 256 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+      className={`flex flex-col bg-card border-r border-border h-screen select-none relative overflow-hidden ${className}`}
+    >
       {/* Brand Header */}
-      <div className="flex items-center space-x-2.5 px-6 h-16 border-b border-border/80 shrink-0">
-        <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary text-white font-bold text-lg">
-          🌱
+      <div className="flex items-center justify-between px-5 h-16 border-b border-border/60 shrink-0 relative">
+        <div
+          onClick={isCollapsed ? onToggleCollapse : undefined}
+          className={`flex items-center space-x-2.5 min-w-0 ${isCollapsed ? 'cursor-pointer hover:scale-105 active:scale-95 transition-transform' : ''}`}
+          title={isCollapsed ? "Expand Sidebar" : undefined}
+        >
+          <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary text-primary-foreground font-bold text-lg shrink-0">
+            🌱
+          </div>
+          {!isCollapsed && (
+            <div className="flex flex-col min-w-0 animate-in fade-in duration-200">
+              <span className="font-semibold text-foreground text-sm tracking-wide leading-none mb-0.5">EcoSphere</span>
+              <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest leading-none">
+                ESG Platform
+              </span>
+            </div>
+          )}
         </div>
-        <div className="flex flex-col">
-          <span className="font-semibold text-foreground text-sm tracking-wide">EcoSphere</span>
-          <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest leading-none">
-            ESG Platform
-          </span>
-        </div>
+        {!isCollapsed && (
+          <button
+            onClick={onToggleCollapse}
+            className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 focus:outline-none"
+            title="Collapse Sidebar"
+          >
+            <ChevronLeft className="h-4.5 w-4.5" />
+          </button>
+        )}
       </div>
 
       {/* Navigation list */}
-      <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
+      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {navigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.to}
+            title={isCollapsed ? item.name : undefined}
             className={({ isActive }) =>
-              `flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+              `flex items-center rounded-xl text-sm font-semibold transition-all duration-200 relative ${
+                isCollapsed ? 'justify-center p-3 mx-1' : 'space-x-3 px-4 py-2.5'
+              } ${
                 isActive
-                  ? 'bg-primary text-white shadow-md shadow-primary/20'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-primary/8 text-primary shadow-sm border border-primary/10'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground border border-transparent'
               }`
             }
           >
-            <item.icon className="h-5 w-5 shrink-0" />
-            <span>{item.name}</span>
+            {({ isActive }) => (
+              <>
+                <item.icon className="h-5 w-5 shrink-0" />
+                {!isCollapsed && <span>{item.name}</span>}
+                {isActive && !isCollapsed && (
+                  <motion.div
+                    layoutId="active-indicator"
+                    className="absolute right-0 top-2.5 bottom-2.5 w-0.75 bg-primary rounded-l-md"
+                  />
+                )}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
       {/* Profile & Footer controls */}
-      <div className="p-4 border-t border-border shrink-0 space-y-4">
+      <div className="p-3.5 border-t border-border/60 shrink-0 space-y-4">
         {/* Theme Quick Toggle */}
-        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/65 text-xs text-muted-foreground">
-          <span>Theme Mode</span>
+        <div className={`flex items-center justify-between rounded-xl bg-muted/50 text-[11px] font-semibold text-muted-foreground/80 ${isCollapsed ? 'p-1' : 'p-2'}`}>
+          {!isCollapsed && <span>Theme Mode</span>}
           <button
             onClick={toggleTheme}
-            className="p-1.5 rounded-md bg-card border border-border shadow-sm hover:text-foreground transition-colors"
-            title="Toggle theme"
+            className={`p-1.5 rounded-lg bg-card border border-border shadow-sm hover:text-foreground transition-all duration-200 ${isCollapsed ? 'mx-auto' : ''}`}
+            title="Toggle Theme"
           >
             {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           </button>
@@ -84,31 +126,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
 
         {/* User Card */}
         {user && (
-          <div className="flex items-center justify-between">
+          <div className={`flex items-center justify-between ${isCollapsed ? 'justify-center' : ''}`}>
             <div className="flex items-center space-x-2.5 min-w-0">
-              <div className="flex items-center justify-center h-9 w-9 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+              <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary/10 text-primary font-bold text-sm shrink-0 border border-primary/5">
                 {user.firstName[0]}
                 {user.lastName[0]}
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-semibold text-foreground truncate">
-                  {user.firstName} {user.lastName}
-                </span>
-                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                  {user.role}
-                </span>
-              </div>
+              {!isCollapsed && (
+                <div className="flex flex-col min-w-0 animate-in fade-in duration-200">
+                  <span className="text-xs font-bold text-foreground/90 truncate leading-none mb-1">
+                    {user.firstName} {user.lastName}
+                  </span>
+                  <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wider leading-none">
+                    {user.role}
+                  </span>
+                </div>
+              )}
             </div>
-            <button
-              onClick={logout}
-              className="p-2 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/5 transition-colors"
-              title="Sign Out"
-            >
-              <LogOut className="h-4.5 w-4.5" />
-            </button>
+            {!isCollapsed && (
+              <button
+                onClick={logout}
+                className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/5 transition-colors focus:outline-none"
+                title="Sign Out"
+              >
+                <LogOut className="h-4.5 w-4.5" />
+              </button>
+            )}
           </div>
         )}
       </div>
-    </aside>
+    </motion.aside>
   );
 };

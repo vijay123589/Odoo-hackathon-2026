@@ -10,7 +10,7 @@ const Environmental = lazy(() => import('../pages/Environmental'));
 const Social = lazy(() => import('../pages/Social'));
 const Governance = lazy(() => import('../pages/Governance'));
 const Reports = lazy(() => import('../pages/Reports'));
-const AICopilot = lazy(() => import('../pages/AICopilot'));
+const AICopilot = lazy(() => import('../pages/Copilot'));
 const Settings = lazy(() => import('../pages/Settings'));
 const Login = lazy(() => import('../pages/Login'));
 

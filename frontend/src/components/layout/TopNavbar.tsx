@@ -19,9 +19,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onMenuToggle }) => {
   const pathnames = location.pathname.split('/').filter((x) => x);
 
   return (
-    <header className="flex items-center justify-between px-6 h-16 bg-card border-b border-border select-none shrink-0 w-full relative z-30">
-      {/* Left section: Breadcrumbs & Hamburger */}
-      <div className="flex items-center space-x-4">
+    <header className="flex items-center justify-between px-8 h-16 bg-card border-b border-border/65 select-none shrink-0 w-full relative z-30 shadow-[0_1px_2px_rgba(0,0,0,0.01)]">
+      {/* Left section: Org Selector & Breadcrumbs */}
+      <div className="flex items-center space-x-5">
         {/* Toggle Sidebar Button for Mobile */}
         <button
           onClick={onMenuToggle}
@@ -30,9 +30,20 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onMenuToggle }) => {
           <Menu className="h-5 w-5" />
         </button>
 
+        {/* Organization Selector */}
+        <div className="hidden md:flex items-center space-x-2.5 border-r border-border/60 pr-5">
+          <div className="h-6 w-6 rounded-md bg-secondary/10 flex items-center justify-center border border-secondary/15 text-[11px] font-bold text-secondary">
+            A
+          </div>
+          <span className="text-xs font-bold text-foreground/80 tracking-wide uppercase">Acme Industries</span>
+          <span className="text-[9px] text-muted-foreground/70 font-semibold px-1.5 py-0.5 bg-muted rounded-md border border-border/50 select-none uppercase tracking-wider scale-90">
+            Global
+          </span>
+        </div>
+
         {/* Breadcrumbs */}
-        <nav className="hidden sm:flex items-center space-x-1.5 text-sm text-muted-foreground">
-          <Link to="/dashboard" className="hover:text-foreground transition-colors font-medium">
+        <nav className="hidden sm:flex items-center space-x-2 text-xs font-semibold text-muted-foreground">
+          <Link to="/dashboard" className="hover:text-foreground transition-colors">
             EcoSphere
           </Link>
           {pathnames.map((name, index) => {
@@ -42,13 +53,13 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onMenuToggle }) => {
 
             return (
               <React.Fragment key={name}>
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/45" />
                 {isLast ? (
-                  <span className="font-semibold text-foreground truncate max-w-[120px]">
+                  <span className="text-foreground/90 font-bold truncate max-w-[120px]">
                     {displayName}
                   </span>
                 ) : (
-                  <Link to={routeTo} className="hover:text-foreground transition-colors font-medium">
+                  <Link to={routeTo} className="hover:text-foreground transition-colors">
                     {displayName}
                   </Link>
                 )}

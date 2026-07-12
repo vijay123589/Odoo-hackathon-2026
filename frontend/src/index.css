@@ -6,65 +6,65 @@
 
 @layer base {
   :root {
-    --background: 220 33% 98%;
-    --foreground: 224 71% 4%;
+    --background: 40 27% 97.5%;
+    --foreground: 240 6% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 240 6% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
+    --popover-foreground: 240 6% 12%;
 
-    --primary: 142.1 76.2% 36.3%; /* Emerald 600 */
-    --primary-foreground: 355.7 100% 97.3%;
+    --primary: 151 39% 17%; /* Deep Forest Green */
+    --primary-foreground: 40 27% 97.5%;
 
-    --secondary: 226.2 84.3% 58.4%; /* EcoSphere Blue */
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 30 15% 48%; /* Earth/Coffee Brown */
+    --secondary-foreground: 40 27% 97.5%;
 
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 38 12% 93%;
+    --muted-foreground: 30 5% 45%;
 
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 38 12% 93%;
+    --accent-foreground: 240 6% 12%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 142.1 76.2% 36.3%;
+    --border: 38 13% 89%;
+    --input: 38 13% 89%;
+    --ring: 151 39% 17%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 140 10% 9%; /* Deep Slate Forest */
+    --foreground: 40 15% 91%;
 
-    --card: 222.2 84% 6.5%;
-    --card-foreground: 210 40% 98%;
+    --card: 140 10% 12%;
+    --card-foreground: 40 15% 91%;
 
-    --popover: 222.2 84% 6.5%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 140 10% 12%;
+    --popover-foreground: 40 15% 91%;
 
-    --primary: 142.1 70.6% 45.3%; /* Emerald 500 */
-    --primary-foreground: 144.4 96.6% 11.4%;
+    --primary: 151 28% 51%; /* Soft Sage Green */
+    --primary-foreground: 140 10% 9%;
 
-    --secondary: 226.2 84.3% 64.3%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 26 40% 63%; /* Bronze/Sand */
+    --secondary-foreground: 140 10% 9%;
 
-    --muted: 217.2 32.6% 15%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 140 8% 15%;
+    --muted-foreground: 40 6% 65%;
 
-    --accent: 217.2 32.6% 15%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 140 8% 15%;
+    --accent-foreground: 40 15% 91%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 15.5%;
-    --input: 217.2 32.6% 15.5%;
-    --ring: 142.1 70.6% 45.3%;
+    --border: 140 8% 16%;
+    --input: 140 8% 16%;
+    --ring: 151 28% 51%;
   }
 }
 
@@ -98,3 +98,54 @@
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
+
+/* Premium shadows & aesthetic utilities */
+.shadow-premium {
+  box-shadow: 0 8px 32px -4px rgba(28, 38, 30, 0.03), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+}
+.dark .shadow-premium {
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.25), 0 1px 2px -1px rgba(0, 0, 0, 0.15);
+}
+
+.shadow-premium-hover {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.shadow-premium-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 48px -8px rgba(28, 38, 30, 0.08), 0 1px 3px -1px rgba(0, 0, 0, 0.02);
+}
+.dark .shadow-premium-hover:hover {
+  box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.4), 0 1px 3px -1px rgba(0, 0, 0, 0.2);
+}
+
+/* Custom premium visual gradients */
+.bg-premium-gradient {
+  background: linear-gradient(135deg, hsl(40 27% 99%) 0%, hsl(40 20% 95.5%) 100%);
+}
+.dark .bg-premium-gradient {
+  background: linear-gradient(135deg, hsl(140 10% 12%) 0%, hsl(140 10% 9%) 100%);
+}
+
+.bg-organic-gradient {
+  background: linear-gradient(135deg, rgba(26, 59, 43, 0.05) 0%, rgba(143, 168, 155, 0.08) 100%);
+}
+.dark .bg-organic-gradient {
+  background: linear-gradient(135deg, rgba(96, 165, 132, 0.08) 0%, rgba(13, 16, 14, 0.2) 100%);
+}
+
+/* Notion-style smooth scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
